@@ -8,7 +8,7 @@ import (
 )
 
 // handshakeHandler specifies the signature of functions that handle DHT messages.
-type handshakeHandler func(context.Context, p2p.ID, *Message) (*Message, error)
+type handshakeHandler func(context.Context, p2p.ID, *Message, p2p.Conn) (*Message, error)
 
 func (hs *Handshake) handlerForMsgType(t Message_Type) handshakeHandler {
 	switch t {
@@ -23,12 +23,13 @@ func (hs *Handshake) handlerForMsgType(t Message_Type) handshakeHandler {
 	}
 }
 
-func (hs *Handshake) handleHello(ctx context.Context, p p2p.ID, pmes *Message) (_ *Message, err error) {
+func (hs *Handshake) handleHello(ctx context.Context, p p2p.ID, pmes *Message, c p2p.Conn) (_ *Message, err error) {
 	// Check result and return corresponding code
 	ok := true
 	var resp *Message
 
 	if ok {
+		c.SetVerified()
 		resp = NewMessage(Message_HELLO_OK)
 		// TODO: fill with local info to finish handshaking
 		BuildHandshake(resp)
@@ -42,14 +43,15 @@ func (hs *Handshake) handleHello(ctx context.Context, p p2p.ID, pmes *Message) (
 	return resp, errors.New("hello error")
 }
 
-func (hs *Handshake) handleHelloOK(ctx context.Context, p p2p.ID, pmes *Message) (_ *Message, err error) {
+func (hs *Handshake) handleHelloOK(ctx context.Context, p p2p.ID, pmes *Message, c p2p.Conn) (_ *Message, err error) {
 
 	// TODO: handle received handshake info
+	c.SetVerified()
 
 	return nil, nil
 }
 
-func (hs *Handshake) handleHelloError(ctx context.Context, p p2p.ID, pmes *Message) (_ *Message, err error) {
+func (hs *Handshake) handleHelloError(ctx context.Context, p p2p.ID, pmes *Message, c p2p.Conn) (_ *Message, err error) {
 
 	// TODO: handle error
 

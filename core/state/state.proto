@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package types;
+
+message AccountMsg {
+    uint64	Nonce = 1;
+    bytes	Balance = 2;
+    bytes	Root = 3;
+    bytes	CodeHash = 4;
+}
+
+message StateMsg {
+
+    // Account
+    AccountMsg Account = 1;
+
+    // address of account
+    bytes Address = 2;
+
+    // hash of address
+    bytes AddrHash = 3;
+
+    // error
+    string DBError = 4;
+
+    // account suicid
+    bool Suicided = 5;
+
+    // account deleted
+    bool Deleted = 6;
+}

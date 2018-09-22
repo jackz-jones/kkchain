@@ -26,16 +26,24 @@
 
 
 [[constraint]]
+  branch = "master"
+  name = "github.com/facebookgo/ensure"
+
+[[constraint]]
   name = "github.com/gogo/protobuf"
   version = "1.1.1"
 
 [[constraint]]
-  branch = "master"
-  name = "github.com/golang/glog"
+  name = "github.com/golang/mock"
+  version = "1.1.1"
 
 [[constraint]]
-  name = "github.com/golang/mock"
-  version = "1.0.0"
+  branch = "master"
+  name = "github.com/invin/gorocksdb"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/jbenet/goprocess"
 
 [[constraint]]
   branch = "master"
@@ -50,12 +58,16 @@
   version = "1.6.2"
 
 [[constraint]]
+  name = "github.com/op/go-logging"
+  version = "1.0.0"
+
+[[constraint]]
   name = "github.com/pkg/errors"
   version = "0.8.0"
 
 [[constraint]]
-  name = "github.com/sirupsen/logrus"
-  version = "0.8.7"
+  name = "github.com/spf13/viper"
+  version = "1.1.0"
 
 [[constraint]]
   branch = "master"
@@ -64,3 +76,12 @@
 [prune]
   go-tests = true
   unused-packages = true
+
+
+[[constraint]]
+  name = "github.com/multiformats/go-multihash"
+  version = "1.0.8"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/deckarep/golang-set"

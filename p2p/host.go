@@ -2,11 +2,11 @@ package p2p
 
 // ConnManager defines interface to manage connections
 type ConnManager interface {
-	// Add a connection
+	// Add a connection after handshake is ok
 	AddConnection(id ID, conn Conn) error
 
-	// Get a connection with ID
-	GetConnection(id ID) (Conn, error)
+	// Get a connection with peer ID
+	Connection(id ID) (Conn, error)
 
 	// Get all connection
 	GetAllConnection() map[string]Conn
@@ -27,7 +27,9 @@ type Notifier interface {
 	Revoke(n Notifiee) error
 }
 
-// Host defines a host for connections
+// Host defines a host for connections, it manages the life circle of each
+// connection after verified, and notifies subscribers when connection is added
+// and removed from connection map
 type Host interface {
 	// Connection manager
 	ConnManager
@@ -39,13 +41,14 @@ type Host interface {
 	ID() ID
 
 	// Connect to remote peer
-	Connect(address string, net Network) (Conn, error)
+	Connect(address string) (Conn, error)
 
-	// Set stream handler
-	SetStreamHandler(protocol string, handler StreamHandler) error
+	// Set message handler
+	SetMessageHandler(protocol string, handler MessageHandler) error
 
 	// returns the stream for protocol
-	GetStreamHandler(protocol string) (StreamHandler, error)
+	MessageHandler(protocol string) (MessageHandler, error)
 
-	NotifyAll(notification func(n Notifiee))
+	// New connection inbound or outbound is created
+	OnConnectionCreated(conn Conn, dir ConnDir)
 }

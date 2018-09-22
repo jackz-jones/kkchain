@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package types;
+
+message ReceiptMsg {
+
+    // state after tx finished
+    bytes PostState = 1;
+
+    // tx status
+    uint64 Status = 2;
+
+    // tx hash
+    bytes TxHash = 3;
+}

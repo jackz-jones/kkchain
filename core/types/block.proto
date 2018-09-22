@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package types;
+
+message BlockHeaderMsg {
+    bytes ParentHash = 1;
+    bytes Miner = 2;
+    bytes StateRoot = 3;
+    bytes TxRoot = 4;
+    bytes ReceiptRoot = 5;
+    bytes Difficulty = 6;
+    bytes Number = 7;
+    bytes Time = 8;
+    bytes Extra = 9;
+    bytes MixDigest = 10;
+    bytes Nonce = 11;
+}
+
+message TransactionMsg {
+
+    // account nonce
+    uint64 Nonce = 1;
+
+    // receiver of this tx
+    bytes Receiver = 2;
+
+    bytes Amount = 3;
+
+    // additional data with this tx
+    bytes Payload = 4;
+
+    // Signature of sender
+    bytes Signature = 5;
+
+    // hash of this tx
+    bytes Hash = 6;
+}
+
+
+message BlockMsg {
+
+    // block header
+    BlockHeaderMsg Header = 1;
+
+    // total difficulty until this block
+    bytes td = 2;
+
+    // receive time stamp
+    uint64 ReceiveTime = 3;
+
+    // origin peer ID
+    string ReceiveFrom = 4;
+
+    // txs included in this block
+    repeated TransactionMsg Transactions = 5;
+}

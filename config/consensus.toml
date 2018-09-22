@@ -1,0 +1,18 @@
+[consensus]
+plugin = "pow"
+
+[pow]
+dbHost = "localhost"           #
+
+[pos]
+dbHost = "localhost"           #
+
+[dpos]
+dbHost = "localhost"           #
+
+[raft]
+dbHost = "localhost"           #
+
+[pbft]
+dbHost = "localhost"           #
+

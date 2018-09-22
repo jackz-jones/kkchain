@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/invin/kkchain/crypto/ed25519"
@@ -20,20 +19,4 @@ func TestSerialization(t *testing.T) {
 
 	out := SerializeMessage(&pid, []byte(message))
 	t.Log("result =", out)
-
-	rid, rmsg := DeserializeMessage(out)
-
-	if rid.Address != address {
-		t.Errorf("expected %v, actual %v", address, rid.Address)
-	}
-
-	if bytes.Compare(rid.PublicKey, keys.PublicKey) != 0 {
-		t.Errorf("expected %v, actual %v", keys.PublicKey, rid.PublicKey)
-	}
-
-	if string(rmsg) != message {
-		t.Errorf("expected %v, actual %v", message, rmsg)
-	}
-
-	t.Log(rmsg)
 }
