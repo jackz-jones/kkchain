@@ -95,6 +95,9 @@ func newWorker(config *params.ChainConfig, bc *core.BlockChain, txpool *core.TxP
 	go w.taskLoop()
 	go w.waitResult()
 
+	// Submit first work to initialize pending state.
+	w.startCh <- struct{}{}
+
 	return w
 }
 
@@ -228,9 +231,6 @@ func (w *worker) commitTask() {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	if !w.isRunning() {
-		return
-	}
 	if w.currentCtx != nil {
 	}
 	tstart := time.Now()
@@ -260,6 +260,14 @@ func (w *worker) commitTask() {
 	err := w.currentContext(parent, header)
 	if err != nil {
 		log.Errorf("Failed to create mining context,err: %v", err)
+		return
+	}
+
+	// should initial snapshotState whatever worker is running
+	w.updateSnapshot()
+
+	// if worker is not running, just return
+	if !w.isRunning() {
 		return
 	}
 
@@ -302,10 +310,7 @@ func (w *worker) commitTask() {
 		return
 	}
 
-	//commit new task
-	w.updateSnapshot()
 	w.taskCh <- &task{block: block, state: s, receipts: receipts, createdAt: time.Now()}
-
 }
 
 // taskLoop is a standalone goroutine to fetch sealing task from the generator and
