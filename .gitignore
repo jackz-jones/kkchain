@@ -18,3 +18,6 @@
 *.project
 *.DS_Store
 cache*
+
+# Local environment vars
+cmd/scripts/environment_vars
