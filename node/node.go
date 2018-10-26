@@ -243,7 +243,7 @@ func (n *Node) startRPC() error {
 	}
 	gpoParams := api.DefaultGasOracleConfig
 	apiBackend.SetGasOracle(api.NewOracle(apiBackend, gpoParams))
-	apis := api.GetAPIs(apiBackend)
+	apis := APIs(apiBackend, n)
 
 	err := n.startInProc(apis)
 	if err != nil {
@@ -252,7 +252,7 @@ func (n *Node) startRPC() error {
 
 	// if you want to use personal_newAccount、personal_unlockAccount ...,
 	// you should add personal inferface into modules when process startHTTP.
-	modules := []string{"eth", "personal"}
+	modules := []string{"eth", "personal", "miner"}
 	cors := []string{""}
 	vhosts := []string{"localhost"}
 
