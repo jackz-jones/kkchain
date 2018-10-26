@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/invin/kkchain/accounts"
+	"github.com/invin/kkchain/accounts/keystore"
 	"github.com/invin/kkchain/api"
 	"github.com/invin/kkchain/common"
 	"github.com/invin/kkchain/config"
@@ -135,6 +136,7 @@ func (n *Node) Coinbase() (eb common.Address, err error) {
 	if coinbase != (common.Address{}) {
 		return coinbase, nil
 	}
+
 	if wallets := n.AccountManager().Wallets(); len(wallets) > 0 {
 		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
 			coinbase := accounts[0].Address
@@ -145,6 +147,17 @@ func (n *Node) Coinbase() (eb common.Address, err error) {
 
 			log.Infof("Coinbase automatically configured,address: %s", coinbase.String())
 			return coinbase, nil
+		}
+
+		// if you want to mine and there are no accounts, should make a faucet account for test
+	} else {
+		ks := n.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+		acc, err := ks.NewAccount("123")
+		if err == nil {
+			log.Infof("new a faucet account %s ", acc.Address.String())
+			return acc.Address, nil
+		} else {
+			log.Errorf("failed to new a initial account: %v", err)
 		}
 	}
 	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
@@ -179,8 +192,10 @@ func (n *Node) Start() {
 		coinbase, err := n.Coinbase()
 		if err == nil {
 			n.miner.SetMiner(coinbase)
+			n.miner.Start()
+		} else {
+			log.Errorf("can not mine: %v", err)
 		}
-		n.miner.Start()
 	}
 
 	if n.config.Api.Rpc {
