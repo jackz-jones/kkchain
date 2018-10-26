@@ -267,7 +267,8 @@ func (b *Block) String() string {
 		gasused: %d
 		nonce: 0x%x
 		tx: %d
-	}`+"\n", b.Number(), b.Hash().String(), b.ParentHash().String(), b.StateRoot().String(), b.Difficulty(), b.GasLimit(), b.GasUsed(), b.Nonce(), b.Txs.Len())
+        miner: %s
+	}`+"\n", b.Number(), b.Hash().String(), b.ParentHash().String(), b.StateRoot().String(), b.Difficulty(), b.GasLimit(), b.GasUsed(), b.Nonce(), b.Txs.Len(), b.Miner().String())
 	return str
 }
 

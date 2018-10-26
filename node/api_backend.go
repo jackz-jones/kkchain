@@ -16,6 +16,7 @@ import (
 	"github.com/invin/kkchain/params"
 	"github.com/invin/kkchain/rpc"
 	"github.com/invin/kkchain/storage"
+	log "github.com/sirupsen/logrus"
 )
 
 // APIBackend implements api.Backend for full nodes
@@ -119,4 +120,91 @@ func (b *APIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.
 
 	context := core.NewEVMContext(msg, header, b.kkchain.BlockChain(), nil)
 	return vm.NewEVM(context, state, b.kkchain.ChainConfig(), vmCfg), vmError, nil
+}
+
+func APIs(apiBackend api.Backend, n *Node) []rpc.API {
+	apis := []rpc.API{
+		{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   NewPublicMinerAPI(n),
+			Public:    true,
+		}, {
+			Namespace: "miner",
+			Version:   "1.0",
+			Service:   NewPrivateMinerAPI(n),
+			Public:    true,
+		},
+	}
+	return append(apis, api.GetAPIs(apiBackend)...)
+}
+
+// PublicMinerAPI provides an API to control the miner.
+// It offers only methods that operate on data that pose no security risk when it is publicly accessible.
+type PublicMinerAPI struct {
+	n *Node
+}
+
+// NewPublicMinerAPI create a new PublicMinerAPI instance.
+func NewPublicMinerAPI(n *Node) *PublicMinerAPI {
+	return &PublicMinerAPI{n}
+}
+
+// Mining returns an indication if this node is currently mining.
+func (api *PublicMinerAPI) Mining() bool {
+	return api.n.miner.Mining()
+}
+
+// PrivateMinerAPI provides private RPC methods to control the miner.
+// These methods can be abused by external users and must be considered insecure for use by untrusted users.
+type PrivateMinerAPI struct {
+	n *Node
+}
+
+// NewPrivateMinerAPI create a new RPC service which controls the miner of this node.
+func NewPrivateMinerAPI(n *Node) *PrivateMinerAPI {
+	return &PrivateMinerAPI{n}
+}
+
+// Start the miner with the given number of threads. If threads is nil the number
+// of workers started is equal to the number of logical CPUs that are usable by
+// this process. If mining is already running, this method adjust the number of
+// threads allowed to use and updates the minimum price required by the transaction
+// pool.
+func (api *PrivateMinerAPI) Start(threads *int) {
+	// Set the number of threads if the seal engine supports it
+	if threads == nil {
+		threads = new(int)
+	} else if *threads == 0 {
+		*threads = -1 // Disable the miner from within
+	}
+	type threaded interface {
+		SetThreads(threads int)
+	}
+	if th, ok := api.n.engine.(threaded); ok {
+		log.Infof("Updated mining threads: %d", *threads)
+		th.SetThreads(*threads)
+	}
+	// Start the miner and return
+	if !api.n.Miner().Mining() {
+		api.n.Miner().Start()
+	}
+}
+
+// Stop the miner
+func (api *PrivateMinerAPI) Stop() bool {
+	type threaded interface {
+		SetThreads(threads int)
+	}
+	if th, ok := api.n.engine.(threaded); ok {
+		th.SetThreads(-1)
+	}
+	api.n.Miner().Stop()
+	return true
+}
+
+// SetEtherbase sets the etherbase of the miner
+func (api *PrivateMinerAPI) SetMiner(etherbase common.Address) bool {
+	api.n.SetCoinbase(etherbase)
+	return true
 }
