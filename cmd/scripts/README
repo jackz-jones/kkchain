@@ -1,0 +1,6 @@
+# Setup
+1. Copy environment_vars.default to a new file environment_vars
+2. Modify the default configurations according to local environment
+
+# Add commands
+1. refer to get_balance.sh for more details
