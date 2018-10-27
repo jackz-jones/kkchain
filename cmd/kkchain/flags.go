@@ -104,6 +104,10 @@ var (
 		Name:  "api.rpc",
 		Usage: "Enable the HTTP-RPC server",
 	}
+	RPCModulesFlag = cli.StringSliceFlag{
+		Name:  "api.rpcmodules",
+		Usage: "Enable the HTTP-RPC service modules",
+	}
 	RPCListenAddrFlag = cli.StringFlag{
 		Name:  "api.rpcaddr",
 		Usage: "HTTP-RPC server listening interface",
@@ -111,6 +115,7 @@ var (
 
 	APIFlags = []cli.Flag{
 		RPCEnabledFlag,
+		RPCModulesFlag,
 		RPCListenAddrFlag,
 	}
 
@@ -201,7 +206,9 @@ func apiConfig(ctx *cli.Context, cfg *config.ApiConfig) {
 	if ctx.GlobalIsSet(RPCEnabledFlag.Name) {
 		cfg.Rpc = ctx.GlobalBool(RPCEnabledFlag.Name)
 	}
-
+	if ctx.GlobalIsSet(RPCModulesFlag.Name) {
+		cfg.RpcModules = ctx.GlobalStringSlice(RPCModulesFlag.Name)
+	}
 	if ctx.GlobalIsSet(RPCListenAddrFlag.Name) {
 		cfg.RpcAddr = ctx.GlobalString(RPCListenAddrFlag.Name)
 	}

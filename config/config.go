@@ -1,6 +1,7 @@
 package config
 
 import (
+	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -13,7 +14,6 @@ import (
 	"github.com/invin/kkchain/storage/rocksdb"
 
 	"github.com/spf13/viper"
-	"io/ioutil"
 )
 
 var (
@@ -40,8 +40,9 @@ var (
 	}
 
 	DefaultAPIConfig = ApiConfig{
-		Rpc:     false,
-		RpcAddr: "/ip4/127.0.0.1/tcp/8545",
+		Rpc:        false,
+		RpcModules: []string{"eth"},
+		RpcAddr:    "/ip4/127.0.0.1/tcp/8545",
 	}
 
 	DefaultAccountConfig = AccountConfig{
@@ -96,8 +97,9 @@ type ConsensusConfig struct {
 }
 
 type ApiConfig struct {
-	Rpc     bool   `mapstructure:"rpc"`
-	RpcAddr string `mapstructure:"rpcaddr"`
+	Rpc        bool     `mapstructure:"rpc"`
+	RpcModules []string `mapstructure:"rpcmodules"`
+	RpcAddr    string   `mapstructure:"rpcaddr"`
 }
 
 type AccountConfig struct {

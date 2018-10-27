@@ -37,6 +37,9 @@ bucketsize = 2
 # Enable rpc
 rpc = true
 
+# RPC service modules
+rpcmodules = ["eth","personal","miner"]
+
 # Address to listen for incoming connections
 rpcaddr = "/ip4/127.0.0.1/tcp/8545"
 

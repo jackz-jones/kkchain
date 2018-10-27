@@ -252,7 +252,7 @@ func (n *Node) startRPC() error {
 
 	// if you want to use personal_newAccount、personal_unlockAccount ...,
 	// you should add personal inferface into modules when process startHTTP.
-	modules := []string{"eth", "personal", "miner"}
+	modules := n.config.Api.RpcModules
 	cors := []string{""}
 	vhosts := []string{"localhost"}
 
@@ -305,9 +305,10 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 		return err
 	}
 	log.WithFields(log.Fields{
-		"url":    fmt.Sprintf("http://%s", endpoint),
-		"cors":   strings.Join(cors, ","),
-		"vhosts": strings.Join(vhosts, ","),
+		"url":     fmt.Sprintf("http://%s", endpoint),
+		"modules": modules,
+		"cors":    strings.Join(cors, ","),
+		"vhosts":  strings.Join(vhosts, ","),
 	}).Info("HTTP endpoint opened")
 
 	// All listeners booted successfully
