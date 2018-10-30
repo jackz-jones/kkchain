@@ -1,4 +1,4 @@
-// Package ethapi implements the general API functions.
+// Package api implements the general API functions.
 package api
 
 import (
@@ -19,7 +19,7 @@ import (
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
-	// General Ethereum API
+	// General API
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	ChainDb() storage.Database
 	AccountManager() *accounts.Manager
@@ -45,17 +45,17 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 	nonceLock := new(AddrLocker)
 	return []rpc.API{
 		{
-			Namespace: "eth",
+			Namespace: "kkc",
 			Version:   "1.0",
 			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
 			Public:    true,
 		}, {
-			Namespace: "eth",
+			Namespace: "kkc",
 			Version:   "1.0",
 			Service:   NewPublicBlockChainAPI(apiBackend),
 			Public:    true,
 		}, {
-			Namespace: "eth",
+			Namespace: "kkc",
 			Version:   "1.0",
 			Service:   NewPublicAccountAPI(apiBackend.AccountManager()),
 			Public:    true,

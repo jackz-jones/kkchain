@@ -294,14 +294,13 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 }
 
 // Sign calculates an ECDSA signature for:
-// keccack256("\x19Ethereum Signed Message:\n" + len(message) + message).
+// keccack256("\x19Kkchain Signed Message:\n" + len(message) + message).
 //
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
 // where the V value will be 27 or 28 for legacy reasons.
 //
 // The account associated with addr must be unlocked.
 //
-// https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
 func (s *PublicTransactionPoolAPI) Sign(addr common.Address, data hexutil.Bytes) (hexutil.Bytes, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: addr}
@@ -623,15 +622,14 @@ func (s *PrivateAccountAPI) SignTransaction(ctx context.Context, args SendTxArgs
 	return &SignTransactionResult{data, signed}, nil
 }
 
-// Sign calculates an Ethereum ECDSA signature for:
-// keccack256("\x19Ethereum Signed Message:\n" + len(message) + message))
+// Sign calculates an ECDSA signature for:
+// keccack256("\x19Kkchain Signed Message:\n" + len(message) + message))
 //
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
 // where the V value will be 27 or 28 for legacy reasons.
 //
 // The key used to calculate the signature is decrypted with the given password.
 //
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
 func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr common.Address, passwd string) (hexutil.Bytes, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: addr}
@@ -650,21 +648,20 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr c
 }
 
 // EcRecover returns the address for the account that was used to create the signature.
-// Note, this function is compatible with eth_sign and personal_sign. As such it recovers
+// Note, this function is compatible with kkc_sign and personal_sign. As such it recovers
 // the address of:
-// hash = keccak256("\x19Ethereum Signed Message:\n"${message length}${message})
+// hash = keccak256("\x19Kkchain Signed Message:\n"${message length}${message})
 // addr = ecrecover(hash, signature)
 //
 // Note, the signature must conform to the secp256k1 curve R, S and V values, where
 // the V value must be be 27 or 28 for legacy reasons.
 //
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
 func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
 	if len(sig) != 65 {
 		return common.Address{}, fmt.Errorf("signature must be 65 bytes long")
 	}
 	if sig[64] != 27 && sig[64] != 28 {
-		return common.Address{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
+		return common.Address{}, fmt.Errorf("invalid signature (V is not 27 or 28)")
 	}
 	sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 
@@ -675,13 +672,13 @@ func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Byt
 	return crypto.PubkeyToAddress(*rpk), nil
 }
 
-// PublicBlockChainAPI provides an API to access the Ethereum blockchain.
+// PublicBlockChainAPI provides an API to access the kkchain blockchain.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicBlockChainAPI struct {
 	b Backend
 }
 
-// NewPublicBlockChainAPI creates a new Ethereum blockchain API.
+// NewPublicBlockChainAPI creates a new kkchain blockchain API.
 func NewPublicBlockChainAPI(b Backend) *PublicBlockChainAPI {
 	return &PublicBlockChainAPI{b}
 }

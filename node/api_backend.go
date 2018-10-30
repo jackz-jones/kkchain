@@ -125,7 +125,7 @@ func (b *APIBackend) GetEVM(ctx context.Context, msg core.Message, state *state.
 func APIs(apiBackend api.Backend, n *Node) []rpc.API {
 	apis := []rpc.API{
 		{
-			Namespace: "eth",
+			Namespace: "kkc",
 			Version:   "1.0",
 			Service:   NewPublicMinerAPI(n),
 			Public:    true,
@@ -203,8 +203,8 @@ func (api *PrivateMinerAPI) Stop() bool {
 	return true
 }
 
-// SetEtherbase sets the etherbase of the miner
-func (api *PrivateMinerAPI) SetMiner(etherbase common.Address) bool {
-	api.n.SetCoinbase(etherbase)
+// Set the coinbase of the miner
+func (api *PrivateMinerAPI) SetMiner(coinbase common.Address) bool {
+	api.n.SetCoinbase(coinbase)
 	return true
 }

@@ -41,7 +41,7 @@ var (
 
 	DefaultAPIConfig = ApiConfig{
 		Rpc:        false,
-		RpcModules: []string{"eth"},
+		RpcModules: []string{"kkc"},
 		RpcAddr:    "/ip4/127.0.0.1/tcp/8545",
 	}
 
