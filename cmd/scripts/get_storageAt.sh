@@ -8,4 +8,4 @@ fi
 source "helpers_common"
 color_printf "Get storage at slot '$2' of contract '$1'"
 
-exe curl -X POST -H "Content-Type:application/json" --data '{"jsonrpc":"2.0","method":"eth_getStorageAt","params":["'$1'", "'$2'", "latest"],"id":1}' ${RPC_URL}
+exe curl -X POST -H "Content-Type:application/json" --data '{"jsonrpc":"2.0","method":"kkc_getStorageAt","params":["'$1'", "'$2'", "latest"],"id":1}' ${RPC_URL}

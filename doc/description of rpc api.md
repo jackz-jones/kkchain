@@ -5,7 +5,6 @@
 在原来的ApiConfig中增加了rpcmodules配置项，表明节点启动开启的一些rpc服务模块，如eth、personal、miner（目前代码中只支持这三种）。
 
 另外，默认情况下，rpcmodules只配置了eth，即外部配置文件中如果不配其他的服务模块，只会开启eth相关接口。
-
 ### 1.2 配置文件示例
 
 ```

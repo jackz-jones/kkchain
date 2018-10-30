@@ -8,4 +8,4 @@ fi
 source "helpers_common"
 color_printf "Get balance of account '$1'"
 
-exe curl -X POST -H "Content-Type:application/json" --data '{"jsonrpc":"2.0","method":"eth_getBalance","params":["'$1'","pending"],"id":1}' ${RPC_URL}
+exe curl -X POST -H "Content-Type:application/json" --data '{"jsonrpc":"2.0","method":"kkc_getBalance","params":["'$1'","pending"],"id":1}' ${RPC_URL}

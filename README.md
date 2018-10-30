@@ -17,7 +17,7 @@ If you want use config file to run a kkchain node, run the following command:
 ### 2.2 command line
 You can also enter specific commands to run the kkchain node, like that：
 
-**kkchain -consensus.mine true -consensus.type pow -network.listen /ip4/127.0.0.1/tcp/9998 -network.nodekey node1.key -network.seed ["89b8bb2b66a41220a9b8ba8f019c291dc69c8d9b1ee023813f9db8f8bdcd1f76@/ip4/127.0.0.1/tcp/9998"] -datadir ./data -api.rpc true -api.rpcmodules ["eth,personal,miner"] -api.rpcaddr /ip4/127.0.0.1/tcp/8545 -dht.bucketsize 2 -network.maxpeer 20**
+**kkchain -consensus.mine true -consensus.type pow -network.listen /ip4/127.0.0.1/tcp/9998 -network.nodekey node1.key -network.seed ["89b8bb2b66a41220a9b8ba8f019c291dc69c8d9b1ee023813f9db8f8bdcd1f76@/ip4/127.0.0.1/tcp/9998"] -datadir ./data -api.rpc true -api.rpcmodules ["kkc,personal,miner"] -api.rpcaddr /ip4/127.0.0.1/tcp/8545 -dht.bucketsize 2 -network.maxpeer 20**
 
 description for the command parameters:
 
@@ -32,7 +32,7 @@ description for the command parameters:
 | dht.bucketsize  | int      | the size of dht bucket                               |
 | datadir         | string   | blockchain data store path                           |
 | api.rpc         | bool     | start rpc service or not                             |
-| api.rpcmodules  | []string | modules need to be open (support eth,personal,miner) |
+| api.rpcmodules  | []string | modules need to be open (support kkc,personal,miner) |
 | api.rpcaddr     | string   | rpc address for client request                       |
 
 **NOTE：** If you run node without any command parameter, the node will start with followinf default config:
@@ -78,9 +78,9 @@ When you modify any parameter in config file, you can use this way to run node, 
 ### 3.1 command line to run multiple nodes
 
 **NODE 1（mining and opening rpc）:**<br>
-./kkchain -consensus.mine -network.listen /ip4/127.0.0.1/tcp/9998 -network.nodekey node1.key -datadir ./data/node1 -api.rpc true -api.rpcmodules ["eth,personal,miner"] -api.rpcaddr /ip4/127.0.0.1/tcp/8545<br><br>
+./kkchain -consensus.mine -network.listen /ip4/127.0.0.1/tcp/9998 -network.nodekey node1.key -datadir ./data/node1 -api.rpc true -api.rpcmodules ["kkc,personal,miner"] -api.rpcaddr /ip4/127.0.0.1/tcp/8545<br><br>
 **NODE 2（mining and opening rpc）:**<br>
-./kkchain -consensus.mine -network.listen /ip4/127.0.0.1/tcp/9999 -network.nodekey node2.key -datadir ./data/node2 -api.rpc true -api.rpcmodules ["eth,personal,miner"] -api.rpcaddr /ip4/127.0.0.1/tcp/8546<br><br>
+./kkchain -consensus.mine -network.listen /ip4/127.0.0.1/tcp/9999 -network.nodekey node2.key -datadir ./data/node2 -api.rpc true -api.rpcmodules ["kkc,personal,miner"] -api.rpcaddr /ip4/127.0.0.1/tcp/8546<br><br>
 **NODE 2（not mining and closing rpc）:**<br>
 ./kkchain -network.listen /ip4/127.0.0.1/tcp/10000 -network.nodekey node3.key -datadir ./data/node3<br><br> 
 
