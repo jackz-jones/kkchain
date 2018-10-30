@@ -1,19 +1,3 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package main
 
 import (
@@ -53,7 +37,7 @@ func TestExternalAccountTransfer(t *testing.T) {
 	chain, receipts := core.GenerateChain(gspec.Config, genesis, pow.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 0:
-			// In block 1, addr1 sends addr2 some ether.
+			// In block 1, addr1 sends addr2 some king.
 			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(500), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
 			gen.AddTx(tx)
 		}
