@@ -216,8 +216,6 @@ func (w *worker) waitResult() {
 			events = append(events, core.ChainHeadEvent{Block: block})
 			events = append(events, core.NewMinedBlockEvent{Block: block})
 			w.chain.PostChainEvents(events, logs)
-
-			//
 			w.engine.PostExecute(w.chain, block)
 
 		case <-w.quitCh:

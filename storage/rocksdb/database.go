@@ -68,7 +68,6 @@ func (r *RDBDatabase) Get(key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// TODO: optimize
 	defer val.Free()
 
 	//fmt.Println("ROCKSDB GET: ", val.Data())

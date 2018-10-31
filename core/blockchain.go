@@ -46,8 +46,6 @@ type Config struct {
 	DataDir string
 }
 
-//currently for testing purposes
-//TODO：the subsequent need to really implement blockchain
 type BlockChain struct {
 	mu          *sync.RWMutex
 	wg          sync.WaitGroup // chain processing wait group for shutting down
@@ -82,7 +80,6 @@ type BlockChain struct {
 	syncStartFeed event.Feed
 	syncDoneFeed  event.Feed
 
-	// TODO: need chain config
 	chainID uint64
 
 	txsFeed      event.Feed
@@ -581,7 +578,6 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
 func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
-	//TODO: read hash by number from rawdb
 	hash := rawdb.ReadCanonicalHash(bc.db, number)
 	if hash == (common.Hash{}) {
 		return nil

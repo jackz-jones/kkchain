@@ -102,7 +102,6 @@ func (c *Chain) doHandleMessage(conn p2p.Conn, msg *Message) {
 	}
 
 	// dispatch handler
-	// TODO: get context and peer id
 	ctx := context.Background()
 	pid := conn.RemotePeer()
 
@@ -329,7 +328,6 @@ func (s *DPeerSet) BestPeer() syncPeer.Peer {
 }
 
 // DPeer represent a peer for downloading. currently, It is a wrapper for peer
-// TODO: make it clear
 type DPeer struct {
 	p *peer
 }

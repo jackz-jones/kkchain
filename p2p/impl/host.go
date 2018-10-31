@@ -42,7 +42,7 @@ func NewHost(id p2p.ID, n p2p.Network) *Host {
 	return &Host{
 		id:             id,
 		connections:    make(map[string]p2p.Conn),
-		maxConnections: 32, // TODO: parameterize
+		maxConnections: 32,
 		handlers:       make(map[string]p2p.MessageHandler),
 		notifiees:      make(map[p2p.Notifiee]struct{}),
 		n:              n,

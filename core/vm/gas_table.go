@@ -381,8 +381,6 @@ func gasRevert(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, m
 
 func gasSuicide(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var gas uint64
-
-	// TODO: default evm chain config satisfied with EIP150 and EIP158
 	gas = gt.Suicide
 	var (
 		address = common.BigToAddress(stack.Back(0))

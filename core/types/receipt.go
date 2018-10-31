@@ -29,10 +29,8 @@ type Receipt struct {
 	PostState         []byte `json:"root"`
 	Status            uint64 `json:"status"`
 	CumulativeGasUsed uint64 `json:"cumulativeGasUsed" gencodec:"required"`
-
-	// TODO：open when add VM
-	Bloom Bloom  `json:"logsBloom"         gencodec:"required"`
-	Logs  []*Log `json:"logs"              gencodec:"required"`
+	Bloom             Bloom  `json:"logsBloom"         gencodec:"required"`
+	Logs              []*Log `json:"logs"              gencodec:"required"`
 
 	// Implementation fields (don't reorder!)
 	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`

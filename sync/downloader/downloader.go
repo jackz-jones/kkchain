@@ -261,13 +261,10 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
 func (d *Downloader) syncWithPeer(p peer.Peer, hash common.Hash, td *big.Int) (err error) {
-	// TODO: tomorrow
-	//d.startFeed.Send(StartEvent{})
 	d.blockchain.PostSyncStartEvent(core.StartEvent{})
 
 	defer func() {
 		// reset on error
-		//d.doneFeed.Send(DoneEvent{err})
 		d.blockchain.PostSyncDoneEvent(core.DoneEvent{err})
 	}()
 
@@ -295,7 +292,6 @@ func (d *Downloader) syncWithPeer(p peer.Peer, hash common.Hash, td *big.Int) (e
 	d.syncStatsChainHeight = height
 	d.syncStatsLock.Unlock()
 
-	// TODO: concurrent
 	if err = d.fetchBlocks(p, origin+1); err == nil {
 		err = d.importBlocks()
 	}
