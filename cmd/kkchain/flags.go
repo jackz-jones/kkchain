@@ -176,7 +176,7 @@ func networkConfig(ctx *cli.Context, cfg *config.NetworkConfig) {
 	}
 
 	if ctx.GlobalIsSet(NetworkMaxPeersFlag.Name) {
-		cfg.MaxPeers = int32(ctx.GlobalInt(NetworkMaxPeersFlag.Name))
+		cfg.MaxPeers = int(ctx.GlobalInt(NetworkMaxPeersFlag.Name))
 	}
 }
 

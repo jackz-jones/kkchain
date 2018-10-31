@@ -81,7 +81,7 @@ type NetworkConfig struct {
 	// Network ID
 	NetworkId uint32 `mapstructure:"networkid"`
 	// Max peers connect with self node
-	MaxPeers int32 `mapstructure:"maxpeers"`
+	MaxPeers int `mapstructure:"maxpeers"`
 }
 
 type DhtConfig struct {

@@ -108,6 +108,7 @@ func NewBlockChain(chainConfig *params.ChainConfig, vmConfig vm.Config, db stora
 		blockCache:   blockCache,
 		futureBlocks: futureBlocks,
 		engine:       engine,
+		chainID:      chainConfig.ChainID.Uint64(),
 	}
 
 	bc.SetValidator(NewBlockValidator(bc))

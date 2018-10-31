@@ -72,7 +72,7 @@ func NewNetwork(networkConfig *config.NetworkConfig, dhtConfig *config.DhtConfig
 		bootstrapNodes: networkConfig.Seeds,
 	}
 
-	n.host = NewHost(id, n)
+	n.host = NewHost(id, n, networkConfig.MaxPeers)
 
 	// Create submodules
 	n.chain = chain.New(n.host, n.bc)

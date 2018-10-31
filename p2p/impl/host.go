@@ -38,11 +38,11 @@ type Host struct {
 }
 
 // NewHost creates a new host object
-func NewHost(id p2p.ID, n p2p.Network) *Host {
+func NewHost(id p2p.ID, n p2p.Network, maxPeers int) *Host {
 	return &Host{
 		id:             id,
 		connections:    make(map[string]p2p.Conn),
-		maxConnections: 32,
+		maxConnections: maxPeers,
 		handlers:       make(map[string]p2p.MessageHandler),
 		notifiees:      make(map[p2p.Notifiee]struct{}),
 		n:              n,
