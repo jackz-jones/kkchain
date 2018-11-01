@@ -108,7 +108,7 @@ func (s *Syncer) Start() error {
 	return nil
 }
 
-// synchronise tries to synchronise with best peer
+// Synchronise tries to synchronise with best peer
 func (s *Syncer) Synchronise(p peer.Peer) {
 	// Short circuit if no peers are available
 	if p == nil {
@@ -150,8 +150,7 @@ func (s *Syncer) Stop() {
 
 // NewBlock injects a new received block from remote peer
 func (s *Syncer) NewBlock(id string, block *types.Block) error {
-	// s.fetcher.Enqueue(id, block)
-	// TODO: compare TD and triggle synchronize if necessary
+	s.fetcher.Enqueue(id, block)
 	return nil
 }
 
@@ -163,14 +162,10 @@ func (s *Syncer) Enqueue(peer string, block *types.Block) error {
 // DeliverHeaders injects a new batch of block headers received from a remote
 // node into the local schedule.
 func (s *Syncer) DeliverHeaders(id string, headers []*types.Header) (err error) {
-	// TODO: filter from fetchers
-	filter := len(headers) == 1
-	if filter {
-		// TODO: send the header to the fetcher just in case
-		// headers = s.fetcher.FilterHeaders(p.id, headers, time.Now())
-	}
-
-	if len(headers) > 0 || !filter {
+	// Currently, only fetching block is supported, so it's unnecessary to forward
+	// headers to the fetcher. If header and body are fetched separately in the future,
+	// we can forward headers to the fetcher.	
+	if len(headers) > 0 {
 		return s.downloader.DeliverHeaders(id, headers)
 	}
 
@@ -179,13 +174,17 @@ func (s *Syncer) DeliverHeaders(id string, headers []*types.Header) (err error) 
 
 // DeliverBlocks injects a new batch of blocks  received from a remote
 // node into the local schedule.
-func (s *Syncer) DeliverBlocks(id string, blocks []*types.Block) (err error) {
-	// TODO: filter from fetchers
+func (s *Syncer) DeliverBlocks(id string, blocks []*types.Block, fetched bool) (err error) {
+	if fetched {
+		remainBlocks := s.fetcher.FilterBlock(id, blocks, time.Now())
+		log.Warnf("Remain %d blocks after filtering", len(remainBlocks))
+		return nil
+	}
+	
 	return s.downloader.DeliverBlocks(id, blocks)
 }
 
 // Notify notifies the hash of headers
-// TODO: move common definitions to a separate package
 func (s *Syncer) Notify(peer string, hash common.Hash, number uint64, time time.Time, blockFetcher func([]common.Hash) error) error {
 	return s.fetcher.Notify(peer, hash, number, time, blockFetcher)
 }

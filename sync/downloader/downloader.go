@@ -605,7 +605,7 @@ func (d *Downloader) fetchBlocks(p peer.Peer, from uint64) error {
 
 			// If no more blocks are inbould, notify the block fetchers and return
 			if packet.Items() == 0 {
-				log.Debug("No more blocks avvailable")
+				log.Debug("No more blocks available")
 				return nil
 			}
 
