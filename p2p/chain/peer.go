@@ -266,6 +266,20 @@ func (p *peer) requestHeadersByHash(origin common.Hash, amount int, skip int, re
 	return p.conn.SendChainMsg(int32(Message_GET_BLOCK_HEADERS), msg)
 }
 
+// requestBlocksByHash fetchs blocks with hashes 
+func (p *peer) requestBlocksByHash(hashes []common.Hash) error {
+	log.Debugf("Fetching %d blocks", len(hashes))
+	temp := [][]byte{}
+	for _, hash := range hashes {
+		temp = append(temp, hash.Bytes())
+	}
+	msg := &FetchBlocksMsg{
+		Hashes: temp,
+	}
+
+	return p.conn.SendChainMsg(int32(Message_FETCH_BLOCKS), msg)
+}
+
 // requestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *peer) requestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {

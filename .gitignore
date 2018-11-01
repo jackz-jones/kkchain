@@ -21,3 +21,4 @@ cache*
 
 # Local environment vars
 cmd/scripts/environment_vars
+cmd/proto/
