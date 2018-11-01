@@ -65,8 +65,6 @@ func IntrinsicGas(data []byte, contractCreation bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if contractCreation {
-
-		// TODO: Is OK that setting the default gas of creation contract to 53000 ?
 		gas = params.TxGasContractCreation
 	}
 	// Bump the required gas by the amount of transactional data

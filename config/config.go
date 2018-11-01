@@ -41,7 +41,7 @@ var (
 
 	DefaultAPIConfig = ApiConfig{
 		Rpc:        false,
-		RpcModules: []string{"eth"},
+		RpcModules: []string{"kkc"},
 		RpcAddr:    "/ip4/127.0.0.1/tcp/8545",
 	}
 
@@ -81,7 +81,7 @@ type NetworkConfig struct {
 	// Network ID
 	NetworkId uint32 `mapstructure:"networkid"`
 	// Max peers connect with self node
-	MaxPeers int32 `mapstructure:"maxpeers"`
+	MaxPeers int `mapstructure:"maxpeers"`
 }
 
 type DhtConfig struct {

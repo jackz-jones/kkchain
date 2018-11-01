@@ -115,12 +115,8 @@ func (hs *Handshake) doHandleMessage(c p2p.Conn, msg *Message) {
 	}
 
 	// dispatch handler
-	// TODO: get context and peer id
 	ctx := context.Background()
 	pid := c.RemotePeer()
-
-	// successfully recv conn, add it
-	// hs.host.AddConnection(pid, c)
 
 	rpmes, err := handler(ctx, pid, msg, c)
 
@@ -131,8 +127,6 @@ func (hs *Handshake) doHandleMessage(c p2p.Conn, msg *Message) {
 
 	// hello error resp will return err,so reset conn and remove it
 	if err != nil {
-		// FIXME: it it necessary？
-		// hs.host.RemoveConnection(pid)
 		c.Close()
 	}
 

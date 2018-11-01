@@ -97,7 +97,6 @@ func (s *Syncer) Start() error {
 				return
 			case <-forceSync.C:
 				// Force a sync even if not enough peers are present
-				// TODO: with the best peer
 				peers := s.buddy.Peers()
 				go s.Synchronise(peers.BestPeer())
 			}

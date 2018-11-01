@@ -690,7 +690,7 @@ func (ethash *Ethash) SetThreads(threads int) {
 //	// to both eth and ethash namespaces.
 //	return []rpc.API{
 //		{
-//			Namespace: "eth",
+//			Namespace: "kkc",
 //			Version:   "1.0",
 //			Service:   &API{ethash},
 //			Public:    true,

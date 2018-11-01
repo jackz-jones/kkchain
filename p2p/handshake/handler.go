@@ -31,23 +31,15 @@ func (hs *Handshake) handleHello(ctx context.Context, p p2p.ID, pmes *Message, c
 	if ok {
 		c.SetVerified()
 		resp = NewMessage(Message_HELLO_OK)
-		// TODO: fill with local info to finish handshaking
 		BuildHandshake(resp)
 		return resp, nil
 	}
 	resp = NewMessage(Message_HELLO_ERROR)
-	// TODO: set error info
-	// resp.Error.code = XXX
-	// resp.Error.desc = "balabla"
-
 	return resp, errors.New("hello error")
 }
 
 func (hs *Handshake) handleHelloOK(ctx context.Context, p p2p.ID, pmes *Message, c p2p.Conn) (_ *Message, err error) {
-
-	// TODO: handle received handshake info
 	c.SetVerified()
-
 	return nil, nil
 }
 

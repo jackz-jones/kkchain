@@ -72,7 +72,7 @@ func NewNetwork(networkConfig *config.NetworkConfig, dhtConfig *config.DhtConfig
 		bootstrapNodes: networkConfig.Seeds,
 	}
 
-	n.host = NewHost(id, n)
+	n.host = NewHost(id, n, networkConfig.MaxPeers)
 
 	// Create submodules
 	n.chain = chain.New(n.host, n.bc)
@@ -83,7 +83,6 @@ func NewNetwork(networkConfig *config.NetworkConfig, dhtConfig *config.DhtConfig
 
 // Start kicks off the p2p stack
 func (n *Network) Start() error {
-	// TODO: use singleton mode
 	if n.keys == nil {
 		return fmt.Errorf("Server.PrivateKey must be set to a non-nil key")
 	}
@@ -91,7 +90,6 @@ func (n *Network) Start() error {
 	// Use goprocess to setup process tree
 	n.proc = goprocess.WithTeardown(func() error {
 		log.Info("Tear down network")
-		// TODO: add other clean code
 		return nil
 	})
 
@@ -177,7 +175,6 @@ func (n *Network) startListening() error {
 
 	// Run listenr process
 	n.proc.Go(func(p goprocess.Process) {
-		// TODO: add addr info
 		for {
 			if conn, err := listener.Accept(); err == nil {
 				c := NewConnection(conn, n, n.host)
@@ -239,20 +236,16 @@ func (n *Network) bootstrap(p goprocess.Process) {
 				log.Errorf("failed to connect boost node: %s", peer.String())
 				return
 			}
-
-			// TODO: optimize
 		}()
 	}
 }
 
 // Sign signs a message
-// TODO: move to another package??
 func (n *Network) Sign(message []byte) ([]byte, error) {
 	return n.keys.Sign(n.conf.SignaturePolicy, n.conf.HashPolicy, message)
 }
 
 // Verify verifies the message
-// TODO: move to another package??
 func (n *Network) Verify(publicKey []byte, message []byte, signature []byte) bool {
 	return crypto.Verify(n.conf.SignaturePolicy, n.conf.HashPolicy, publicKey, message, signature)
 }

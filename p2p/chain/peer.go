@@ -390,7 +390,6 @@ func (ps *PeerSet) BestPeer() *peer {
 	return bestPeer
 }
 
-// TODO: should close all peer conn ?
 func (ps *PeerSet) Close() {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()

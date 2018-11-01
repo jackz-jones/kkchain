@@ -62,7 +62,6 @@ var stringtokenTypes = []string{
 	stringValue:      "string",
 }
 
-// TODO：lexer是解析源代码并将其转换为tokens的基本结构.Tokens由编译器解释。
 // lexer is the basic construct for parsing
 // source code and turning them in to tokens.
 // Tokens are interpreted by the compiler.

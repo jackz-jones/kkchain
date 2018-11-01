@@ -6,6 +6,3 @@ import (
 
 // MessageHandler is the type of function used to handle messages
 type MessageHandler func(Conn, proto.Message)
-
-// TODO: define message ID
-

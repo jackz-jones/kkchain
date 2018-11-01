@@ -33,5 +33,3 @@ func NewMessage(typ Message_Type, data interface{}) *Message {
 	}
 	return m
 }
-
-// TODO: add other routines

@@ -8,4 +8,4 @@ fi
 source "helpers_common"
 color_printf "Get receipt for tx '$1'"
 
-exe curl -X POST -H "Content-Type:application/json" --data '{"jsonrpc":"2.0","method":"eth_getTransactionReceipt","params":["'$1'"],"id":1}' ${RPC_URL}
+exe curl -X POST -H "Content-Type:application/json" --data '{"jsonrpc":"2.0","method":"kkc_getTransactionReceipt","params":["'$1'"],"id":1}' ${RPC_URL}

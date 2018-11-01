@@ -104,7 +104,6 @@ func (dht *DHT) doHandleMessage(c p2p.Conn, msg *Message) {
 	}
 
 	// dispatch handler
-	// TODO: get context and peer id
 	ctx := context.Background()
 	pid := c.RemotePeer()
 
@@ -145,7 +144,6 @@ func (dht *DHT) syncLoop() {
 	//first sync
 	dht.SyncRouteTable()
 
-	//TODO: config timer
 	syncLoopTicker := time.NewTicker(DefaultSyncTableInterval)
 	defer syncLoopTicker.Stop()
 
@@ -168,10 +166,8 @@ func (dht *DHT) syncLoop() {
 
 func (dht *DHT) AddPeer(peer PeerID) {
 
-	//dht.store.Update(&peer)
 	peer.addTime = time.Now()
 	dht.table.Update(peer)
-	//TODO: limit number of goroutine
 	if !peer.Equals(dht.self) && dht.pingpong.GetStopCh(peer.HashHex()) == nil {
 		go dht.ping(peer)
 	}
@@ -196,18 +192,16 @@ func (dht *DHT) FindTargetNeighbours(target []byte, peer PeerID) {
 	}
 
 	conn, err := dht.host.Connection(peer.ID)
-	//TODO: dial remote peer???
 	if err != nil {
 		conn, err = dht.host.Connect(peer.ID.Address)
 		if err != nil {
 			log.Error(err)
 		}
 
-		// FIXME: delay FIND_NODE to next round
+		// delay FIND_NODE to next round
 		return
 	}
 
-	// TODO: send messages after handshaking
 	//send find neighbours request to peer
 	pmes := NewMessage(Message_FIND_NODE, hex.EncodeToString(target))
 	if err = conn.WriteMessage(pmes, protocolDHT); err != nil {
