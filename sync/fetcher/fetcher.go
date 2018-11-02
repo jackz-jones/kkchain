@@ -74,8 +74,7 @@ type announce struct {
 //	time    time.Time       // Arrival time of the headers
 //}
 
-//// bodyFilterTask represents a batch of block bodies (transactions and uncles)
-//// needing fetcher filtering.
+//// bodyFilterTask represents a batch of block bodies needing fetcher filtering.
 type blockFilterTask struct {
 	peer   string         // The source peer of block
 	blocks []*types.Block // Collection of headers to filter

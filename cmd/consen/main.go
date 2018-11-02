@@ -10,15 +10,17 @@ import (
 	"time"
 
 	"github.com/invin/kkchain/common"
+	"github.com/invin/kkchain/config"
 	"github.com/invin/kkchain/consensus"
 	"github.com/invin/kkchain/consensus/pow"
 	"github.com/invin/kkchain/core"
-	"github.com/invin/kkchain/crypto/blake2b"
 	"github.com/invin/kkchain/crypto/ed25519"
 	"github.com/invin/kkchain/miner"
 	"github.com/invin/kkchain/p2p"
 	"github.com/invin/kkchain/p2p/impl"
 	"github.com/invin/kkchain/params"
+
+	"github.com/invin/kkchain/core/vm"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -27,12 +29,30 @@ func main() {
 	keypath := flag.String("k", "", "")
 	mineFlag := flag.String("m", "", "")
 	fakeFlag := flag.String("f", "fakeMineFlag", "true is fake mine")
-	dataStoreDir := flag.String("d", "dataStoreDir", "A directory that stores block data")
+	dataStoreDir := flag.String("d", "", "A directory that stores block data")
 	flag.Parse()
 
-	config := &core.Config{DataDir: "data"}
+	//config := &core.Config{DataDir: ""}
+	cfg := config.Config{
+		GeneralConfig: config.DefaultGeneralConfig,
+		Network:       &config.DefaultNetworkConfig,
+		Dht:           &config.DefaultDhtConfig,
+	}
 
-	chainDb, _ := core.OpenDatabase(config, *dataStoreDir)
+	cfg.DataDir = *dataStoreDir
+	if cfg.DataDir != "" {
+		absdatadir, err := filepath.Abs(cfg.DataDir)
+		if err != nil {
+			return
+		}
+		cfg.DataDir = absdatadir
+
+		if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
+			return
+		}
+	}
+
+	chainDb, _ := config.OpenDatabase(&cfg, "chaindata")
 
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, nil)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
@@ -45,7 +65,9 @@ func main() {
 	}).Info("Initialised chain configuration")
 
 	engine := newEngine(fakeFlag)
-	chain, _ := core.NewBlockChain(chainDb, engine)
+
+	vmConfig := vm.Config{EnablePreimageRecording: false}
+	chain, _ := core.NewBlockChain(chainConfig, vmConfig, chainDb, engine)
 
 	go func() {
 		ticker := time.NewTicker(8 * time.Second)
@@ -58,7 +80,7 @@ func main() {
 	go doP2P(chain, *port, *keypath)
 
 	if *mineFlag == "true" {
-		doMiner(chain, engine)
+		doMiner(chainConfig, chain, engine)
 	}
 
 	select {}
@@ -66,14 +88,9 @@ func main() {
 
 func doP2P(bc *core.BlockChain, port, keypath string) {
 
-	p2pconfig := p2p.Config{
-		SignaturePolicy: ed25519.New(),
-		HashPolicy:      blake2b.New(),
-	}
-
 	listen := "/ip4/127.0.0.1/tcp/" + port
-
-	net := impl.NewNetwork(keypath, listen, p2pconfig, bc)
+	config.DefaultNetworkConfig.PrivateKey = keypath
+	config.DefaultNetworkConfig.Listen = listen
 
 	if port != "9998" {
 		remoteKeyPath := "node1.key"
@@ -82,8 +99,11 @@ func doP2P(bc *core.BlockChain, port, keypath string) {
 		node := "/ip4/127.0.0.1/tcp/9998"
 		node = hex.EncodeToString(pub) + "@" + node
 		log.Infof("remote peer: %s", node)
-		net.BootstrapNodes = []string{node}
+		config.DefaultNetworkConfig.Seeds = []string{node}
+		config.DefaultDhtConfig.Seeds = []string{node}
 	}
+
+	net := impl.NewNetwork(&config.DefaultNetworkConfig, &config.DefaultDhtConfig, bc)
 
 	err := net.Start()
 	if err != nil {
@@ -118,12 +138,12 @@ func newEngine(fakeFlag *string) consensus.Engine {
 
 }
 
-func doMiner(chain *core.BlockChain, engine consensus.Engine) {
+func doMiner(chainConfig *params.ChainConfig, chain *core.BlockChain, engine consensus.Engine) {
 	defer engine.Close()
 
-	txpool := core.NewTxPool()
+	txpool := core.NewTxPool(core.DefaultTxPoolConfig, chainConfig, chain)
 
-	miner := miner.New(chain, txpool, engine)
+	miner := miner.New(chainConfig, chain, txpool, engine)
 	defer miner.Close()
 
 	miner.SetMiner(common.HexToAddress("0x67b1043995cf9fb7dd27f6f7521342498d473c05"))

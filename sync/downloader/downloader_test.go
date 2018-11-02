@@ -1,30 +1,30 @@
-package downloader 
+package downloader
 
 import (
-	"testing"
-	"math/big"
-	"sync"
 	"errors"
 	"fmt"
+	"math/big"
+	"sync"
+	"testing"
 	"time"
 
-	"github.com/invin/kkchain/core"
 	"github.com/invin/kkchain/common"
-	"github.com/invin/kkchain/core/types"
-	"github.com/invin/kkchain/storage/memdb"
 	"github.com/invin/kkchain/consensus/pow"
-	"github.com/invin/kkchain/storage"
+	"github.com/invin/kkchain/core"
+	"github.com/invin/kkchain/core/types"
 	"github.com/invin/kkchain/crypto"
 	"github.com/invin/kkchain/params"
-	"github.com/invin/kkchain/sync/peer"
+	"github.com/invin/kkchain/storage"
+	"github.com/invin/kkchain/storage/memdb"
 	sc "github.com/invin/kkchain/sync/common"
+	"github.com/invin/kkchain/sync/peer"
 )
 
 var (
-	testKey, _  		= crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddress 		= crypto.PubkeyToAddress(testKey.PublicKey)
+	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
 
-	blockCacheItems     = 8192             // Maximum number of blocks to cache before throttling the download
+	blockCacheItems = 8192 // Maximum number of blocks to cache before throttling the download
 )
 
 // Reduce some of the parameters to make the tester faster.
@@ -36,9 +36,9 @@ func init() {
 
 type downloadTester struct {
 	downloader *Downloader
-	peers map[string]peer.Peer
+	peers      map[string]peer.Peer
 
-	genesis *types.Block	// Genesis block used by the tester and peers
+	genesis *types.Block     // Genesis block used by the tester and peers
 	stateDb storage.Database // Database used by the tester for syncing from peers
 	peerDb  storage.Database // Database of the peers containing all data
 
@@ -79,20 +79,19 @@ func newTester() *downloadTester {
 		peerChainTds:      make(map[string]map[common.Hash]*big.Int),
 		peerMissingStates: make(map[string]map[common.Hash]bool),
 	}
-	tester.stateDb = memdb.New() 
+	tester.stateDb = memdb.New()
 	tester.stateDb.Put(genesis.StateRoot().Bytes(), []byte{0x00})
 
 	// tester.downloader = NewDownloader(FullSync, tester.stateDb, new(event.TypeMux), tester, nil, tester.dropPeer)
 	tester.downloader = New(tester, tester)
-	tester.peers = make(map[string]peer.Peer) 
+	tester.peers = make(map[string]peer.Peer)
 	return tester
 }
 
 // makeChain creates a chain of n blocks starting at and including parent.
 // the returned hash chain is ordered head->parent. In addition, every 3rd block
-// contains a transaction and every 5th an uncle to allow testing correct block
-// reassembly.
-func (dl *downloadTester) makeChain(n int, seed byte, parent *types.Block, parentReceipts types.Receipts, heavy bool) ([]common.Hash, 
+// contains a transaction to allow testing correct block reassembly.
+func (dl *downloadTester) makeChain(n int, seed byte, parent *types.Block, parentReceipts types.Receipts, heavy bool) ([]common.Hash,
 	map[common.Hash]*types.Header, map[common.Hash]*types.Block, map[common.Hash]types.Receipts) {
 	// db := memdb.New()
 	// engine := pow.NewFakeDelayer(15 * time.Second)
@@ -317,7 +316,7 @@ func (dl *downloadTester) newSlowPeer(id string, version int, hashes []common.Ha
 	defer dl.lock.Unlock()
 
 	// var err = dl.downloader.RegisterPeer(id, version, &downloadTesterPeer{dl: dl, id: id, delay: delay})
-	
+
 	peer := &downloadTesterPeer{dl: dl, id: id, delay: delay}
 	var err = dl.Register(peer)
 
@@ -399,14 +398,14 @@ func (dl *downloadTester) UnRegister(id string) error {
 		delete(dl.peers, id)
 		return nil
 	}
-	
+
 	return fmt.Errorf("not found peer %v", id)
 }
 
 func (dl *downloadTester) Peer(id string) peer.Peer {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
-	
+
 	if p, found := dl.peers[id]; found {
 		return p
 	}
@@ -528,8 +527,6 @@ func (dlp *downloadTesterPeer) RequestBlocksByNumber(origin uint64, amount int) 
 	return nil
 }
 
-
-
 // assertOwnChain checks if the local chain contains the correct number of items
 // of the various chain components.
 func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
@@ -540,7 +537,7 @@ func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
 // number of items of the various chain components.
 func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, lengths []int) {
 	// Initialize the counters for the first fork
-	headers, blocks, receipts := lengths[0], lengths[0], lengths[0]- sc.FSMinFullBlocks
+	headers, blocks, receipts := lengths[0], lengths[0], lengths[0]-sc.FSMinFullBlocks
 
 	if receipts < 0 {
 		receipts = 1
@@ -549,13 +546,13 @@ func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, leng
 	for _, length := range lengths[1:] {
 		headers += length - common
 		blocks += length - common
-		receipts += length - common - sc.FSMinFullBlocks 
+		receipts += length - common - sc.FSMinFullBlocks
 	}
 	switch tester.downloader.mode {
 	case FullSync:
 		receipts = 1
-	// case LightSync:
-	// 	blocks, receipts = 1, 1
+		// case LightSync:
+		// 	blocks, receipts = 1, 1
 	}
 	if hs := len(tester.ownHeaders); hs != headers {
 		t.Fatalf("synchronised headers mismatch: have %v, want %v", hs, headers)
@@ -586,9 +583,9 @@ func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, leng
 // Tests that simple synchronization against a canonical chain works correctly.
 // In this test common ancestor lookup should be short circuited and not require
 // binary searching.
-func TestCanonicalSynchronisation62(t *testing.T)      { testCanonicalSynchronisation(t, 62, FullSync) }
-func TestCanonicalSynchronisation63Full(t *testing.T)  { testCanonicalSynchronisation(t, 63, FullSync) }
-func TestCanonicalSynchronisation64Full(t *testing.T)  { testCanonicalSynchronisation(t, 64, FullSync) }
+func TestCanonicalSynchronisation62(t *testing.T)     { testCanonicalSynchronisation(t, 62, FullSync) }
+func TestCanonicalSynchronisation63Full(t *testing.T) { testCanonicalSynchronisation(t, 63, FullSync) }
+func TestCanonicalSynchronisation64Full(t *testing.T) { testCanonicalSynchronisation(t, 64, FullSync) }
 
 func testCanonicalSynchronisation(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()

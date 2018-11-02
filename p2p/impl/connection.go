@@ -79,7 +79,6 @@ func (c *Connection) WriteMessage(message proto.Message, protocol string) error 
 		return err
 	}
 
-	// TODO: use integer
 	// set protocol
 	signed.Protocol = protocol
 	return c.write(c.conn, signed, &c.mux)
@@ -95,10 +94,9 @@ func (c *Connection) prepareMessage(message proto.Message) (*protobuf.Message, e
 	if err != nil {
 		return nil, err
 	}
-	// TODO: set localID
+
 	id := protobuf.ID(c.h.ID())
 
-	// TODO:
 	signature, err := c.n.Sign(
 		SerializeMessage(&id, raw.Value),
 	)
@@ -237,7 +235,6 @@ func (c *Connection) parseMessage(msg *protobuf.Message) (proto.Message, string,
 	return ptr.Message, msg.Protocol, nil
 }
 
-// TODO:
 // only use for chain request
 func (c *Connection) SendChainMsg(msgType int32, msgData interface{}) error {
 	switch msgData.(type) {

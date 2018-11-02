@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/invin/kkchain/config"
 	"github.com/invin/kkchain/p2p"
 	log "github.com/sirupsen/logrus"
 )
@@ -32,29 +33,21 @@ type DHTConfig struct {
 // DHT implements a Distributed Hash Table for p2p
 type DHT struct {
 	// self
-	host    p2p.Host
-	network p2p.Network
+	host p2p.Host
 
 	quitCh         chan bool
 	table          *RoutingTable
 	store          *PeerStore
-	config         *DHTConfig
+	config         *config.DhtConfig
 	self           PeerID
 	BootstrapNodes []string
 	pingpong       *PingPongService
 }
 
-func DefaultConfig() *DHTConfig {
-	return &DHTConfig{
-		BucketSize:      BucketSize,
-		RoutingTableDir: "",
-	}
-}
-
 // New creates a new DHT object with the given peer as as the 'local' host
-func New(config *DHTConfig, network p2p.Network, host p2p.Host) *DHT {
+func New(dhtConfig *config.DhtConfig, host p2p.Host) *DHT {
 	// If no node database was given, use an in-memory one
-	db, err := newPeerStore(config.RoutingTableDir)
+	db, err := newPeerStore(dhtConfig.RoutingTableDir)
 	if err != nil {
 		return nil
 	}
@@ -62,16 +55,16 @@ func New(config *DHTConfig, network p2p.Network, host p2p.Host) *DHT {
 	self := CreateID(host.ID().Address, host.ID().PublicKey)
 
 	dht := &DHT{
-		quitCh:   make(chan bool),
-		config:   config,
-		self:     self,
-		table:    CreateRoutingTable(self),
-		store:    db,
-		pingpong: newPingPongService(),
+		quitCh:         make(chan bool),
+		config:         dhtConfig,
+		self:           self,
+		table:          CreateRoutingTable(self),
+		store:          db,
+		pingpong:       newPingPongService(),
+		BootstrapNodes: dhtConfig.Seeds,
 	}
 
 	dht.host = host
-	dht.network = network
 
 	if err := dht.host.SetMessageHandler(protocolDHT, dht.handleMessage); err != nil {
 		panic(err)
@@ -111,7 +104,6 @@ func (dht *DHT) doHandleMessage(c p2p.Conn, msg *Message) {
 	}
 
 	// dispatch handler
-	// TODO: get context and peer id
 	ctx := context.Background()
 	pid := c.RemotePeer()
 
@@ -152,7 +144,6 @@ func (dht *DHT) syncLoop() {
 	//first sync
 	dht.SyncRouteTable()
 
-	//TODO: config timer
 	syncLoopTicker := time.NewTicker(DefaultSyncTableInterval)
 	defer syncLoopTicker.Stop()
 
@@ -175,10 +166,8 @@ func (dht *DHT) syncLoop() {
 
 func (dht *DHT) AddPeer(peer PeerID) {
 
-	//dht.store.Update(&peer)
 	peer.addTime = time.Now()
 	dht.table.Update(peer)
-	//TODO: limit number of goroutine
 	if !peer.Equals(dht.self) && dht.pingpong.GetStopCh(peer.HashHex()) == nil {
 		go dht.ping(peer)
 	}
@@ -203,18 +192,16 @@ func (dht *DHT) FindTargetNeighbours(target []byte, peer PeerID) {
 	}
 
 	conn, err := dht.host.Connection(peer.ID)
-	//TODO: dial remote peer???
 	if err != nil {
 		conn, err = dht.host.Connect(peer.ID.Address)
 		if err != nil {
 			log.Error(err)
 		}
 
-		// FIXME: delay FIND_NODE to next round
+		// delay FIND_NODE to next round
 		return
 	}
 
-	// TODO: send messages after handshaking
 	//send find neighbours request to peer
 	pmes := NewMessage(Message_FIND_NODE, hex.EncodeToString(target))
 	if err = conn.WriteMessage(pmes, protocolDHT); err != nil {
@@ -240,10 +227,20 @@ func (dht *DHT) SyncRouteTable() {
 	syncedPeers := make(map[string]bool)
 
 	// sync with seed nodes.
-	for _, addr := range dht.network.Bootstraps() {
+	for _, addr := range dht.BootstrapNodes {
+
+		// check the seed is not self
+		self := hex.EncodeToString(dht.host.ID().PublicKey) + "@" + dht.host.ID().Address
+		if addr == self {
+			continue
+		}
+
 		pid, err := ParsePeerAddr(addr)
 		if err != nil {
-			log.Errorf("connect with error: %v", err)
+			log.WithFields(log.Fields{
+				"addr":  addr,
+				"error": err,
+			}).Error("failed to parse peer addr for dht")
 			continue
 		}
 
@@ -284,7 +281,15 @@ func (dht *DHT) saveTableToStore() {
 }
 
 func (dht *DHT) loadBootstrapNodes() {
-	for _, addr := range dht.network.Bootstraps() {
+	for _, addr := range dht.BootstrapNodes {
+
+		// check the seed is not self
+		self := hex.EncodeToString(dht.host.ID().PublicKey) + "@" + dht.host.ID().Address
+		if addr == self {
+			log.Warn("refuse to load self to dht table")
+			continue
+		}
+
 		peer, err := ParsePeerAddr(addr)
 		if err != nil {
 			continue
@@ -369,6 +374,8 @@ func (dht *DHT) checkPingPong() {
 					dht.pingpong.DeletePingPongAt(p)
 				}
 			}
+		case <-dht.quitCh:
+			return
 		}
 	}
 }

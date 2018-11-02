@@ -13,8 +13,6 @@ import (
 // ReadDatabaseVersion retrieves the version number of the database.
 func ReadDatabaseVersion(db DatabaseReader) int {
 	var version int
-
-	// TODO: check err?
 	enc, _ := db.Get(databaseVerisionKey)
 	rlp.DecodeBytes(enc, &version)
 

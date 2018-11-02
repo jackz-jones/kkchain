@@ -18,6 +18,10 @@ import (
 	"github.com/invin/kkchain/core/state"
 	"github.com/invin/kkchain/core/types"
 
+	"os"
+	"os/user"
+	"path/filepath"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -29,14 +33,34 @@ var (
 var (
 	errLargeBlockTime    = errors.New("timestamp too big")
 	errZeroBlockTime     = errors.New("timestamp equals parent's")
-	errTooManyUncles     = errors.New("too many uncles")
-	errDuplicateUncle    = errors.New("duplicate uncle")
-	errUncleIsAncestor   = errors.New("uncle is ancestor")
-	errDanglingUncle     = errors.New("uncle's parent is not ancestor")
 	errInvalidDifficulty = errors.New("non-positive difficulty")
 	errInvalidMixDigest  = errors.New("invalid mix digest")
 	errInvalidPoW        = errors.New("invalid proof-of-work")
 )
+
+var (
+	DefaultConfig = Config{
+		CacheDir:       "ethash",
+		CachesInMem:    2,
+		CachesOnDisk:   3,
+		DatasetsInMem:  1,
+		DatasetsOnDisk: 2,
+	}
+)
+
+func init() {
+	home := os.Getenv("HOME")
+	if home == "" {
+		if user, err := user.Current(); err == nil {
+			home = user.HomeDir
+		}
+	}
+	if runtime.GOOS == "windows" {
+		DefaultConfig.DatasetDir = filepath.Join(home, "AppData", "Ethash")
+	} else {
+		DefaultConfig.DatasetDir = filepath.Join(home, ".ethash")
+	}
+}
 
 func (ethash *Ethash) Initialize(chain consensus.ChainReader, header *types.Header) error {
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
@@ -50,10 +74,10 @@ func (ethash *Ethash) Initialize(chain consensus.ChainReader, header *types.Head
 
 func (ethash *Ethash) Finalize(chain consensus.ChainReader, state *state.StateDB, block *types.Block) error {
 	header := block.HeaderWithoutCopy()
-	// Accumulate any block and uncle rewards and commit the final state root
+	// Accumulate any block rewards and commit the final state root
 	accumulateRewards(state, header)
 
-	header.StateRoot = state.IntermediateRoot(false)
+	header.StateRoot = state.IntermediateRoot(true)
 
 	return nil
 }
@@ -322,6 +346,12 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainReader, time uint64, p
 	return calcDifficultyFrontier(time, parent)
 }
 
+// Author implements consensus.Engine, returning the header's coinbase as the
+// proof-of-work verified author of the block.
+func (ethash *Ethash) Author(header *types.Header) (common.Address, error) {
+	return header.Miner, nil
+}
+
 // calcDifficultyFrontier is the difficulty adjustment algorithm. It returns the
 // difficulty that a new block should have when created at time given the parent
 // block's time and difficulty. The calculation uses the Frontier rules.
@@ -363,14 +393,13 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 	return diff
 }
 
-// AccumulateRewards credits the coinbase of the given block with the mining
-// reward. The total reward consists of the static block reward and rewards for
-// included uncles. The coinbase of each uncle block is also rewarded.
+// AccumulateRewards credits the coinbase of the given block with the mining reward.
+// The total reward consists of the static block reward.
 func accumulateRewards(state *state.StateDB, header *types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
 
-	// Accumulate the rewards for the miner and any included uncles
+	// Accumulate the rewards for the miner
 	reward := new(big.Int).Set(blockReward)
 	state.AddBalance(header.Miner, reward)
 }

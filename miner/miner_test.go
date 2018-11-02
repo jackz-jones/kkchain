@@ -1,17 +1,21 @@
 package miner
 
 import (
-	"github.com/invin/kkchain/common"
-	"github.com/invin/kkchain/consensus/pow"
-	"github.com/invin/kkchain/core"
-	"github.com/invin/kkchain/params"
 	"os"
 	"os/user"
 	"path/filepath"
 	"testing"
 
-	logger "github.com/sirupsen/logrus"
+	"github.com/invin/kkchain/common"
+	"github.com/invin/kkchain/consensus/pow"
+	"github.com/invin/kkchain/core"
+	"github.com/invin/kkchain/params"
+
 	"time"
+
+	"github.com/invin/kkchain/config"
+	"github.com/invin/kkchain/core/vm"
+	logger "github.com/sirupsen/logrus"
 )
 
 func TestMiner_Start(t *testing.T) {
@@ -31,9 +35,16 @@ func TestMine(t *testing.T) {
 		}
 	}
 
-	config := &core.Config{DataDir: ""}
+	cfg := &config.Config{
+		GeneralConfig: config.DefaultGeneralConfig,
+		Network:       &config.DefaultNetworkConfig,
+		Dht:           &config.DefaultDhtConfig,
+	}
 
-	chainDb, _ := core.OpenDatabase(config, "chaindata")
+	chainDb, err := config.OpenDatabase(cfg, "chaindata")
+	if err != nil {
+		return
+	}
 
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, nil)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
@@ -56,11 +67,12 @@ func TestMine(t *testing.T) {
 	engine := pow.New(powConfig, nil)
 	defer engine.Close()
 
-	chain, _ := core.NewBlockChain(chainDb, engine)
+	vmConfig := vm.Config{EnablePreimageRecording: false}
+	chain, _ := core.NewBlockChain(chainConfig, vmConfig, chainDb, engine)
 
-	txpool := core.NewTxPool()
+	txpool := core.NewTxPool(core.DefaultTxPoolConfig, chainConfig, chain)
 
-	miner := New(chain, txpool, engine)
+	miner := New(chainConfig, chain, txpool, engine)
 	defer miner.Close()
 
 	miner.SetMiner(common.HexToAddress("0x67b1043995cf9fb7dd27f6f7521342498d473c05"))

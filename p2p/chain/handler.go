@@ -57,8 +57,12 @@ func (c *Chain) handlerForMsgType(t Message_Type) chainHandler {
 		return c.handleNewBlock
 	case Message_GET_BLOCKS:
 		return c.handleGetBlocks
+	case Message_FETCH_BLOCKS:
+		return c.handleFetchBlocks
 	case Message_BLOCKS:
 		return c.handleBlocks
+	case Message_BLOCKS_FETCHED:
+		return c.handleBlocksFetched
 	default:
 		return nil
 	}
@@ -391,7 +395,7 @@ func (c *Chain) handleNewBlockHashs(ctx context.Context, p p2p.ID, pmes *Message
 
 	// schedule all unknown hashes for retrival
 	for _, block := range unknown {
-		c.syncer.Notify(id, block.Hash, block.Number, time.Now(), peer.requestHeader)
+		c.syncer.Notify(id, block.Hash, block.Number, time.Now(), peer.requestBlocksByHash)
 	}
 
 	return nil, nil
@@ -459,23 +463,49 @@ func (c *Chain) handleNewBlock(ctx context.Context, p p2p.ID, pmes *Message) (_ 
 }
 
 func (c *Chain) handleGetBlocks(ctx context.Context, p p2p.ID, pmes *Message) (_ *Message, err error) {
-	var resp *Message
 	msg := pmes.GetBlocksMsg
 	if msg == nil {
 		return nil, errEmptyMsgContent
 	}
 
 	blocks := []*types.Block{}
+	
 	for i := msg.StartNum; i <= msg.StartNum+msg.Amount; i++ {
 		block := c.blockchain.GetBlockByNumber(i)
 		if block == nil {
-
-			// TODO: skip to find collect blocks
+			log.Warnf("Failed to get block %d", i)
 			break
 		}
 		blocks = append(blocks, block)
 	}
+	
+	return c.buildBlocksMsg(Message_BLOCKS, blocks)	
+}
 
+func (c *Chain) handleFetchBlocks(ctx context.Context, p p2p.ID, pmes *Message) (_ *Message, err error) {
+	msg := pmes.FetchBlocksMsg
+	if msg == nil {
+		return nil, errEmptyMsgContent
+	}
+
+	blocks := []*types.Block{}
+	
+	for _, hash := range msg.Hashes {
+		temp := common.BytesToHash(hash)
+		block := c.blockchain.GetBlockByHash(temp)
+		if block == nil {
+			log.Debug("Failed to get block ", temp.String())
+			break
+		}
+
+		blocks = append(blocks, block)
+	}
+	
+	return c.buildBlocksMsg(Message_BLOCKS_FETCHED, blocks)
+	
+}
+
+func (c *Chain) buildBlocksMsg(msgid Message_Type, blocks []*types.Block) (*Message, error) {
 	bbytes, err := json.Marshal(blocks)
 	if err != nil {
 		log.Errorf("failed to marshal %d blocks", len(blocks))
@@ -485,11 +515,18 @@ func (c *Chain) handleGetBlocks(ctx context.Context, p p2p.ID, pmes *Message) (_
 	dataMsg := &DataMsg{
 		Data: bbytes,
 	}
-	resp = NewMessage(Message_BLOCKS, dataMsg)
-	return resp, nil
+	return NewMessage(msgid, dataMsg), nil
 }
 
-func (c *Chain) handleBlocks(ctx context.Context, p p2p.ID, pmes *Message) (_ *Message, err error) {
+func (c *Chain) handleBlocks(ctx context.Context, p p2p.ID, pmes *Message) (*Message, error) {
+	return c.deliverBlocks(ctx, p, pmes, false)
+}
+
+func (c *Chain) handleBlocksFetched(ctx context.Context, p p2p.ID, pmes *Message) (*Message, error) {
+	return c.deliverBlocks(ctx, p, pmes, true)
+}
+
+func (c *Chain) deliverBlocks(ctx context.Context, p p2p.ID, pmes *Message, fetched bool) (_ *Message, err error) {
 	msg := pmes.DataMsg
 	if msg == nil {
 		return nil, errEmptyMsgContent
@@ -514,7 +551,7 @@ func (c *Chain) handleBlocks(ctx context.Context, p p2p.ID, pmes *Message) (_ *M
 		}).Info("receive history block")
 	}
 
-	c.syncer.DeliverBlocks(pid, blocks)
+	c.syncer.DeliverBlocks(pid, blocks, fetched)
 
 	// no resp
 	return nil, nil

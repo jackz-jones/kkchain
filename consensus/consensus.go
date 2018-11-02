@@ -26,7 +26,7 @@ type Context struct {
 }
 
 // ChainReader defines a small collection of methods needed to access the local
-// blockchain during header and/or uncle verification.
+// blockchain during header verification.
 type ChainReader interface {
 
 	// CurrentHeader retrieves the current header from the local chain.
@@ -58,6 +58,11 @@ type Engine interface {
 	Close() error
 
 	CalcDifficulty(chain ChainReader, time uint64, parent *types.Header) *big.Int
+
+	// Author retrieves the address of the account that minted the given
+	// block, which may be different from the header's coinbase if a consensus
+	// engine is based on signatures.
+	Author(header *types.Header) (common.Address, error)
 }
 
 type Network interface {

@@ -47,6 +47,10 @@ message GetBlocksMsg {
    uint64 amount = 2;
 }
 
+message FetchBlocksMsg {
+    repeated bytes hashes = 1;
+}
+
 message DataMsg {
    bytes data = 1;
 }
@@ -65,6 +69,8 @@ message Message {
         NEW_BLOCK = 9;
         GET_BLOCKS = 10;
         BLOCKS = 11;
+        FETCH_BLOCKS = 12;
+        BLOCKS_FETCHED = 13;
     }
 
     // defines what type of message it is.
@@ -75,6 +81,7 @@ message Message {
     GetBlockHeadersMsg getBlockHeadersMsg = 3;
     DataMsg dataMsg = 4;
     GetBlocksMsg getBlocksMsg = 5;
+    FetchBlocksMsg fetchBlocksMsg = 6;
 }
 
 

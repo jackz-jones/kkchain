@@ -1,4 +1,4 @@
-//go:generate go run scripts.go
+//go:generate go run proto.go
 
 package main
 
@@ -13,29 +13,30 @@ var (
 	goPath = os.Getenv("GOPATH")
 )
 
-const (
-	currentDir = "."      // Current directory
-	vendorDir  = "vendor" // Vendor directory
-	protoExt   = ".proto" // Proto file extension
-	protoc     = "protoc" // Proto compiler
-)
-
-// func main() {
-// 	if err := generateProtos(currentDir); err != nil {
-// 		fmt.Printf("%+v", err)
-// 	}
-// }
+// Notice that generated file will be placed under current directory. 
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Println(os.Args)
+		fmt.Printf("Usage: %s absulute_parent_path_of_proto_files\n", os.Args[0])
+		return
+	}
+	if err := generateProtos(os.Args[1]); err != nil {
+		fmt.Printf("%+v", err)
+	}
+}
 
 func generateProtos(dir string) error {
+
 	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		// Skip vendor directory if any
-		if info.IsDir() && info.Name() == vendorDir {
+		// skip vendor directory
+		if info.IsDir() && info.Name() == "vendor" {
 			return filepath.SkipDir
 		}
-
-		// Find all the protobuf files
-		if filepath.Ext(path) == protoExt {
-			// Prepare the args
+		
+		// find all protobuf files
+		if filepath.Ext(path) == ".proto" {
+			fmt.Println(path)
+			// args
 			args := []string{
 				"-I=.",
 				fmt.Sprintf("-I=%s", filepath.Join(goPath, "src")),
@@ -44,15 +45,13 @@ func generateProtos(dir string) error {
 				"--gogofaster_out=Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types:.",
 				path,
 			}
-
-			// fmt.Println(args)
-			// Execute protoc one by one
-			cmd := exec.Command(protoc, args...)
-			if err := cmd.Run(); err != nil {
+			cmd := exec.Command("protoc", args...)
+			err = cmd.Run()
+			if err != nil {
+				fmt.Println(err)
 				return err
 			}
 		}
-
 		return nil
 	})
 }

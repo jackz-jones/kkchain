@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
-	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	"github.com/invin/kkchain/common"
 	"github.com/invin/kkchain/consensus"
 	"github.com/invin/kkchain/core/rawdb"
@@ -19,9 +17,9 @@ import (
 	"github.com/invin/kkchain/core/types"
 	"github.com/invin/kkchain/event"
 	"github.com/invin/kkchain/storage"
-	"github.com/invin/kkchain/storage/memdb"
-	"github.com/invin/kkchain/storage/rocksdb"
 
+	"github.com/invin/kkchain/core/vm"
+	"github.com/invin/kkchain/params"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -48,14 +46,14 @@ type Config struct {
 	DataDir string
 }
 
-//currently for testing purposes
-//TODO：the subsequent need to really implement blockchain
 type BlockChain struct {
-	mu      *sync.RWMutex
-	wg      sync.WaitGroup // chain processing wait group for shutting down
-	procmu  *sync.RWMutex  // block processor lock
-	chainmu *sync.RWMutex  // blockchain insertion lock
-	config  Config
+	mu          *sync.RWMutex
+	wg          sync.WaitGroup // chain processing wait group for shutting down
+	procmu      *sync.RWMutex  // block processor lock
+	chainmu     *sync.RWMutex  // blockchain insertion lock
+	config      Config
+	chainConfig *params.ChainConfig // Chain & network configuration
+	vmConfig    vm.Config
 
 	engine    consensus.Engine
 	validator Validator // block and state validator interface
@@ -82,14 +80,13 @@ type BlockChain struct {
 	syncStartFeed event.Feed
 	syncDoneFeed  event.Feed
 
-	// TODO: need chain config
 	chainID uint64
 
 	txsFeed      event.Feed
 	newBlockFeed event.Feed
 }
 
-func NewBlockChain(db storage.Database, engine consensus.Engine) (*BlockChain, error) {
+func NewBlockChain(chainConfig *params.ChainConfig, vmConfig vm.Config, db storage.Database, engine consensus.Engine) (*BlockChain, error) {
 
 	headerCache, _ := lru.New(headerCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -98,6 +95,8 @@ func NewBlockChain(db storage.Database, engine consensus.Engine) (*BlockChain, e
 	numberCache, _ := lru.New(numberCacheLimit)
 
 	bc := &BlockChain{
+		chainConfig:  chainConfig,
+		vmConfig:     vmConfig,
 		mu:           &sync.RWMutex{},
 		procmu:       &sync.RWMutex{},
 		chainmu:      &sync.RWMutex{},
@@ -109,10 +108,11 @@ func NewBlockChain(db storage.Database, engine consensus.Engine) (*BlockChain, e
 		blockCache:   blockCache,
 		futureBlocks: futureBlocks,
 		engine:       engine,
+		chainID:      chainConfig.ChainID.Uint64(),
 	}
 
 	bc.SetValidator(NewBlockValidator(bc))
-	bc.SetProcessor(NewStateProcessor(bc))
+	bc.SetProcessor(NewStateProcessor(chainConfig, bc))
 	//init genesis block
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
@@ -308,47 +308,6 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	return bc.loadLastState()
 }
 
-//TODO: remove to node config
-func OpenDatabase(config *Config, name string) (storage.Database, error) {
-	if config.DataDir == "" {
-		return memdb.New(), nil
-	}
-	db, err := rocksdb.New(resolvePath(name), nil)
-	if err != nil {
-		return nil, err
-	}
-	return db, nil
-}
-
-// ResolvePath resolves path in the instance directory.
-func resolvePath(path string) string {
-	if filepath.IsAbs(path) {
-		return path
-	}
-	joinPath := filepath.Join("./data", path)
-	if flag, _ := PathExists(joinPath); !flag {
-		err := os.MkdirAll(joinPath, 0766)
-		if err != nil {
-			log.Errorf("Create directory error: %v", err)
-		}
-	}
-
-	return joinPath
-}
-
-func PathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
-}
-
-//END TODO
-
 // WriteBlockWithState writes the block and all associated state to the database.
 func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
 	bc.wg.Add(1)
@@ -385,9 +344,8 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	}
 
 	// Write other block data using a batch.
-	//TODO:implement writeReceipts
-	//batch := bc.db.NewBatch()
-	//rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
+	batch := bc.db.NewBatch()
+	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
@@ -406,14 +364,14 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 			}
 		}
 		// Write the positional metadata for transaction/receipt lookups and preimages
-		//rawdb.WriteTxLookupEntries(batch, block)
-		//rawdb.WritePreimages(batch, block.NumberU64(), state.Preimages())
+		rawdb.WriteTxLookupEntries(batch, block)
+		rawdb.WritePreimages(batch, block.NumberU64(), state.Preimages())
 
 	}
 
-	// if err := batch.Write(); err != nil {
-	// 	return err
-	// }
+	if err := batch.Write(); err != nil {
+		return err
+	}
 
 	// Set new head.
 	bc.insert(block)
@@ -621,7 +579,6 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
 func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
-	//TODO: read hash by number from rawdb
 	hash := rawdb.ReadCanonicalHash(bc.db, number)
 	if hash == (common.Hash{}) {
 		return nil
@@ -911,7 +868,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		}
 
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := bc.processor.Process(block, state)
+		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}

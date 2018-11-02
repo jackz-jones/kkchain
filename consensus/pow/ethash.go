@@ -484,7 +484,8 @@ func New(config Config, notify []string) *Ethash {
 		submitWorkCh: make(chan *mineResult),
 		fetchRateCh:  make(chan chan uint64),
 		submitRateCh: make(chan *hashrate),
-		exitCh:       make(chan chan error),
+		// Will block when Close is called
+		// exitCh:       make(chan chan error),
 	}
 	//go ethash.remote(notify)
 	return ethash
@@ -689,7 +690,7 @@ func (ethash *Ethash) SetThreads(threads int) {
 //	// to both eth and ethash namespaces.
 //	return []rpc.API{
 //		{
-//			Namespace: "eth",
+//			Namespace: "kkc",
 //			Version:   "1.0",
 //			Service:   &API{ethash},
 //			Public:    true,

@@ -75,7 +75,21 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 
 // ChainId returns which chain id this transaction was signed for (if at all)
 func (tx *Transaction) ChainId() *big.Int {
-	return tx.data.V
+	return deriveChainId(tx.data.V)
+}
+
+// Protected returns whether the transaction is protected from replay protection.
+func (tx *Transaction) Protected() bool {
+	return isProtectedV(tx.data.V)
+}
+
+func isProtectedV(V *big.Int) bool {
+	if V.BitLen() <= 8 {
+		v := V.Uint64()
+		return v != 27 && v != 28
+	}
+	// anything not 27 or 28 is considered protected
+	return true
 }
 
 func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
@@ -132,6 +146,27 @@ func (tx *Transaction) Hash() common.Hash {
 	v := rlpHash(tx)
 	tx.hash.Store(v)
 	return v
+}
+
+// AsMessage returns the transaction as a core.Message.
+//
+// AsMessage requires a signer to derive the sender.
+//
+// XXX Rename message to something less arbitrary?
+func (tx *Transaction) AsMessage(s Signer) (Message, error) {
+	msg := Message{
+		nonce:      tx.data.Nonce,
+		gasLimit:   tx.data.GasLimit,
+		gasPrice:   new(big.Int).Set(tx.data.GasPrice),
+		to:         tx.data.Receiver,
+		amount:     tx.data.Amount,
+		data:       tx.data.Payload,
+		checkNonce: true,
+	}
+
+	var err error
+	msg.from, err = Sender(s, tx)
+	return msg, err
 }
 
 // WithSignature returns a new transaction with the given signature.
@@ -273,3 +308,39 @@ func (t *TransactionsByPriceAndNonce) Shift() {
 func (t *TransactionsByPriceAndNonce) Pop() {
 	heap.Pop(&t.heads)
 }
+
+// Message is a fully derived transaction and implements core.Message
+//
+// NOTE: In a future PR this will be removed.
+type Message struct {
+	to         *common.Address
+	from       common.Address
+	nonce      uint64
+	amount     *big.Int
+	gasLimit   uint64
+	gasPrice   *big.Int
+	data       []byte
+	checkNonce bool
+}
+
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
+	return Message{
+		from:       from,
+		to:         to,
+		nonce:      nonce,
+		amount:     amount,
+		gasLimit:   gasLimit,
+		gasPrice:   gasPrice,
+		data:       data,
+		checkNonce: checkNonce,
+	}
+}
+
+func (m Message) From() common.Address { return m.from }
+func (m Message) To() *common.Address  { return m.to }
+func (m Message) GasPrice() *big.Int   { return m.gasPrice }
+func (m Message) Value() *big.Int      { return m.amount }
+func (m Message) Gas() uint64          { return m.gasLimit }
+func (m Message) Nonce() uint64        { return m.nonce }
+func (m Message) Data() []byte         { return m.data }
+func (m Message) CheckNonce() bool     { return m.checkNonce }

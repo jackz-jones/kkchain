@@ -3,6 +3,7 @@ package core
 import (
 	"github.com/invin/kkchain/core/state"
 	"github.com/invin/kkchain/core/types"
+	"github.com/invin/kkchain/core/vm"
 )
 
 // Validator is an interface which defines the standard for block validation. It
@@ -24,5 +25,5 @@ type Validator interface {
 // of gas used in the process and return an error if any of the internal rules
 // failed.
 type Processor interface {
-	Process(block *types.Block, statedb *state.StateDB) (types.Receipts, []*types.Log, uint64, error)
+	Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error)
 }

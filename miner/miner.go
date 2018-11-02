@@ -4,10 +4,13 @@ import (
 	"sync/atomic"
 
 	"github.com/invin/kkchain/consensus"
+	"github.com/invin/kkchain/core/state"
+	"github.com/invin/kkchain/core/types"
 	"github.com/invin/kkchain/event"
 
 	"github.com/invin/kkchain/common"
 	"github.com/invin/kkchain/core"
+	"github.com/invin/kkchain/params"
 	logger "github.com/sirupsen/logrus"
 )
 
@@ -29,12 +32,12 @@ type Miner struct {
 	syncDoneSub event.Subscription
 }
 
-func New(bc *core.BlockChain, txpool *core.TxPool, engine consensus.Engine) *Miner {
+func New(config *params.ChainConfig, bc *core.BlockChain, txpool *core.TxPool, engine consensus.Engine) *Miner {
 	miner := &Miner{
 		quitCh:      make(chan struct{}),
 		syncStartCh: make(chan core.StartEvent),
 		syncDoneCh:  make(chan core.DoneEvent),
-		worker:      newWorker(bc, txpool, engine),
+		worker:      newWorker(config, bc, txpool, engine),
 		chain:       bc,
 		syncDone:    1,
 	}
@@ -109,4 +112,18 @@ func (m *Miner) Mining() bool {
 
 func (m *Miner) SetMiner(addr common.Address) {
 	m.worker.setMiner(addr)
+}
+
+// PendingBlock returns the currently pending block.
+//
+// Note, to access both the pending block and the pending state
+// simultaneously, please use Pending(), as the pending state can
+// change between multiple method calls
+func (self *Miner) PendingBlock() *types.Block {
+	return self.worker.pendingBlock()
+}
+
+// Pending returns the currently pending block and associated state.
+func (self *Miner) Pending() (*types.Block, *state.StateDB) {
+	return self.worker.pending()
 }

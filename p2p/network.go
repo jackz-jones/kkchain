@@ -43,8 +43,6 @@ type Network interface {
 
 	// Main process
 	Proc() goprocess.Process
-
-	Bootstraps() []string
 }
 
 // Conn wraps connection related operations, such as reading and writing

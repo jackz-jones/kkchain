@@ -1,0 +1,47 @@
+# This is a TOML config file.
+# For more information, see https://github.com/toml-lang/toml
+
+##### general config options #####
+datadir = "data"
+
+##### advanced configuration options #####
+
+##### consensus configuration options #####
+[consensus]
+# Enable mining
+mine = true
+# Consensus type
+type = "pow"
+
+#coinbase = "37fc69c6e656f94a142ce8878c045704a5cd6520"
+
+##### p2p server configuration options #####
+[network]
+
+# Address to listen for incoming connections
+listen = "/ip4/127.0.0.1/tcp/9998"
+
+# Comma separated list of seed nodes to connect to
+seeds = ["89b8bb2b66a41220a9b8ba8f019c291dc69c8d9b1ee023813f9db8f8bdcd1f76@/ip4/127.0.0.1/tcp/9998"]
+
+# Network private key file path
+privatekey = "node1.key"
+
+##### dht configuration options #####
+[dht]
+# Bucket size of routine table
+bucketsize = 2
+
+##### api configuration options #####
+[api]
+# Enable rpc
+rpc = true
+
+# RPC service modules
+rpcmodules = ["kkc","personal","miner"]
+
+# Address to listen for incoming connections
+rpcaddr = "/ip4/127.0.0.1/tcp/8545"
+
+[acc]
+

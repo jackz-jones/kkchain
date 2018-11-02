@@ -36,7 +36,6 @@ var (
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), nil, &CliqueConfig{Period: 0, Epoch: 30000}}
 
 	TestChainConfig = &ChainConfig{big.NewInt(1), new(EthashConfig), nil}
-	// TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -88,11 +87,11 @@ func (c *ChainConfig) String() string {
 	)
 }
 
-// GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
+// GasTable returns the gas table
 //
 // The returned GasTable's fields shouldn't, under any circumstances, be changed.
 func (c *ChainConfig) GasTable(num *big.Int) GasTable {
-	return GasTableHomestead
+	return GasTableInit
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -141,23 +140,3 @@ func newCompatError(what string, storedblock, newblock *big.Int) *ConfigCompatEr
 func (err *ConfigCompatError) Error() string {
 	return fmt.Sprintf("mismatching %s in database (have %d, want %d, rewindto %d)", err.What, err.StoredConfig, err.NewConfig, err.RewindTo)
 }
-
-// Rules wraps ChainConfig and is merely syntatic sugar or can be used for functions
-// that do not have or require information about the block.
-//
-// Rules is a one time interface meaning that it shouldn't be used in between transition
-// phases.
-// type Rules struct {
-// 	ChainID                                   *big.Int
-// 	IsHomestead, IsEIP150, IsEIP155, IsEIP158 bool
-// 	IsByzantium                               bool
-// }
-
-// Rules ensures c's ChainID is not nil.
-// func (c *ChainConfig) Rules(num *big.Int) Rules {
-// 	chainID := c.ChainID
-// 	if chainID == nil {
-// 		chainID = new(big.Int)
-// 	}
-// 	return Rules{ChainID: new(big.Int).Set(chainID), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsByzantium: c.IsByzantium(num)}
-// }
