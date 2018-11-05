@@ -24,6 +24,15 @@ var (
 	compileAt string
 )
 
+func init() {
+	// // 设置日志格式
+	// log.SetFormatter(&log.JSONFormatter{})
+	// // 设置输出
+	// log.SetOutput(os.Stdout)
+	// 设置日志级别
+	//log.SetLevel(log.DebugLevel)
+}
+
 func main() {
 	app := cli.NewApp()
 	app.Action = run

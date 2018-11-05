@@ -46,7 +46,9 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 	}
 
 	b.header.Miner = addr
+
 	b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
+
 }
 
 // SetExtra sets the extra data field of the generated block.
@@ -217,7 +219,10 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 			Difficulty: parent.Difficulty(),
 			//UncleHash:  parent.UncleHash(),
 		}),
-		GasLimit: CalcGasLimit(parent),
+		//origin code
+		//GasLimit: CalcGasLimit(parent),
+		//add for solve invalid gasUsed error .add by lmh 20181101
+		GasLimit: CalcGasLimit(parent) + 200000000,
 		Number:   new(big.Int).Add(parent.Number(), common.Big1),
 		Time:     time,
 	}
@@ -254,6 +259,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), common.Hash{}, len(b.txs))
+
 	receipt, _, err := ApplyTransaction(b.config, bc, &b.header.Miner, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
 	if err != nil {
 		panic(err)

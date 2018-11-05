@@ -1,6 +1,9 @@
 package core
 
 import (
+	"fmt"
+	"sync"
+
 	"github.com/invin/kkchain/common"
 	"github.com/invin/kkchain/core/state"
 	"github.com/invin/kkchain/core/types"
@@ -61,6 +64,75 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return receipts, allLogs, *usedGas, nil
 }
 
+// Process processes the state changes according to the rules by running
+// the transaction messages using the statedb and applying any rewards to
+// the processor (coinbase).
+//
+// Process returns the receipts and logs accumulated during the process and
+// returns the amount of gas that was used in the process. If any of the
+// transactions failed to execute due to insufficient gas it will return an error.
+func (p *StateProcessor) ProcessConcurrent(routineNum int, block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+	var (
+		receiptsArray = make([]types.Receipts, routineNum)
+		receipts      types.Receipts
+		usedGasArray  = make([]*uint64, routineNum)
+		totalusedGas  = new(uint64)
+		header        = block.Header()
+		allLogsArray  = make([][]*types.Log, routineNum)
+		allLogs       []*types.Log
+		gp            = new(GasPool).AddGas(block.GasLimit())
+		retrunError   error
+		txs           = block.Transactions()
+	)
+
+	// Iterate over and process the individual transactions
+	wg := sync.WaitGroup{}
+	wg.Add(routineNum)
+	executeTxs := func(txs types.Transactions, receipts types.Receipts, allLogs []*types.Log, usedGasArray []*uint64, index int) {
+		for i, tx := range txs {
+			statedb.Prepare(tx.Hash(), block.Hash(), i)
+			fmt.Printf("tx.nonce : %d \n", tx.Nonce())
+			//TODO: apply tx
+			receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGasArray[index], cfg)
+			if err != nil {
+				receipts = nil
+				allLogs = nil
+				*totalusedGas = 0
+				retrunError = err
+				fmt.Printf("ApplyTransaction error : %s \n", err)
+				return
+			}
+			//receipt := &types.Receipt{}
+
+			receipts = append(receipts, receipt)
+			allLogs = append(allLogs, receipt.Logs...)
+		}
+		wg.Done()
+	}
+	for j := 0; j < routineNum; j++ {
+		if j == routineNum-1 {
+			go executeTxs(txs[(j+1)*routineNum:], receiptsArray[j], allLogsArray[j], usedGasArray, j)
+		} else {
+			go executeTxs(txs[j*routineNum:(j+1)*routineNum], receiptsArray[j], allLogsArray[j], usedGasArray, j)
+		}
+
+	}
+	wg.Wait()
+	if retrunError != nil {
+		fmt.Printf("executeTxs error : %s \n", retrunError)
+	}
+	//combine receipts,allLogs and totalGas
+	for j := 0; j < routineNum; j++ {
+		receipts = append(receipts, receiptsArray[j]...)
+		allLogs = append(allLogs, allLogsArray[j]...)
+		*totalusedGas = *totalusedGas + *usedGasArray[j]
+	}
+	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
+	p.bc.engine.Finalize(p.bc, statedb, block)
+
+	return receipts, allLogs, *totalusedGas, nil
+}
+
 // ApplyTransaction attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
@@ -82,7 +154,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	}
 	// Update the state with pending changes
 	var root []byte
-	statedb.Finalise(true)
+	// statedb.Finalise(true)   //cancel Finalise for concurrent test .add by lmh 20181101
 
 	*usedGas += gas
 

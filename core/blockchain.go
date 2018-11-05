@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/hashicorp/golang-lru"
 	"github.com/invin/kkchain/common"
@@ -751,6 +752,183 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	return n, err
 }
 
+// //InsertChainConcurrent for test concurrent execute tx
+// func (bc *BlockChain) InsertChainConcurrent(chain types.Blocks) (int, error) {
+// 	n, events, logs, err := bc.insertChainConcurrent(chain)
+// 	bc.PostChainEvents(events, logs)
+// 	return n, err
+// }
+
+// func (bc *BlockChain) executeTxConcurrent(routineNum int, chain types.Blocks) (int, []interface{}, []*types.Log, error) {
+// 	// A queued approach to delivering events. This is generally
+// 	// faster than direct delivery and requires much less mutex
+// 	// acquiring.
+// 	var (
+// 		//stats         = insertStats{startTime: mclock.Now()}
+// 		events        = make([]interface{}, 0, len(chain))
+// 		lastCanon     *types.Block
+// 		coalescedLogs []*types.Log
+// 	)
+// 	if routineNum > len(chain) {
+// 		return 0, events, coalescedLogs, errors.New("routineNum must less than BlockArray length")
+// 	}
+// 	wg := sync.WaitGroup{}
+// 	wg.Add(routineNum)
+// 	execute := func(chain types.Blocks) (int, []interface{}, []*types.Log, error) {
+// 		for i, block := range chain {
+
+// 			//TODO: optimization parallel verify header???
+// 			err := bc.engine.VerifyHeader(bc, block.Header())
+// 			if err == nil {
+// 				err = bc.Validator().ValidateBody(block)
+// 			}
+
+// 			switch {
+// 			case err == ErrKnownBlock:
+// 				// Block and state both already known. However if the current block is below
+// 				// this number we did a rollback and we should reimport it nonetheless.
+// 				if bc.CurrentBlock().NumberU64() >= block.NumberU64() {
+// 					continue
+// 				}
+// 			case err == consensus.ErrPrunedAncestor:
+// 				// Block competing with the canonical chain, store in the db, but don't process
+// 				// until the competitor TD goes above the canonical TD
+// 				currentBlock := bc.CurrentBlock()
+// 				localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
+// 				externTd := new(big.Int).Add(bc.GetTd(block.ParentHash(), block.NumberU64()-1), block.Difficulty())
+// 				if localTd.Cmp(externTd) > 0 {
+// 					if err = bc.WriteBlockWithoutState(block, externTd); err != nil {
+// 						return i, events, coalescedLogs, err
+// 					}
+// 					continue
+// 				}
+// 				// Competitor chain beat canonical, gather all blocks from the common ancestor
+// 				var winner []*types.Block
+
+// 				parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+// 				for !bc.HasState(parent.StateRoot()) {
+// 					winner = append(winner, parent)
+// 					parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)
+// 				}
+// 				for j := 0; j < len(winner)/2; j++ {
+// 					winner[j], winner[len(winner)-1-j] = winner[len(winner)-1-j], winner[j]
+// 				}
+// 				// Import all the pruned blocks to make the state available
+// 				bc.chainmu.Unlock()
+// 				_, evs, logs, err := bc.insertChain(winner)
+// 				bc.chainmu.Lock()
+// 				events, coalescedLogs = evs, logs
+
+// 				if err != nil {
+// 					return i, events, coalescedLogs, err
+// 				}
+// 			case err != nil:
+// 				return i, events, coalescedLogs, err
+// 			}
+
+// 			// Create a new statedb using the parent block and report an
+// 			// error if it fails.
+// 			var parent *types.Block
+// 			if i == 0 {
+// 				parent = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+// 			} else {
+// 				parent = chain[i-1]
+// 			}
+// 			state, err := state.New(parent.StateRoot(), bc.stateCache)
+// 			if err != nil {
+// 				return i, events, coalescedLogs, err
+// 			}
+
+// 			// Process block using the parent state as reference point.
+// 			receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
+// 			if err != nil {
+// 				return i, events, coalescedLogs, err
+// 			}
+
+// 			//Validate the state using the default validator
+// 			err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
+// 			if err != nil {
+// 				return i, events, coalescedLogs, err
+// 			}
+
+// 			// Write the block to the chain and get the status.
+// 			err = bc.WriteBlockWithState(block, receipts, state)
+// 			if err != nil {
+// 				return i, events, coalescedLogs, err
+// 			}
+
+// 			coalescedLogs = append(coalescedLogs, logs...)
+// 			events = append(events, ChainEvent{block, block.Hash(), logs})
+// 			lastCanon = block
+// 		}
+// 		wg.Done()
+// 	}
+
+// 	for j := 0; j < routineNum; j++ {
+// 		if j == routineNum-1 {
+// 			go execute(chain[(j+1)*routineNum:])
+// 		} else {
+// 			go execute(chain[j*routineNum : (j+1)*routineNum])
+// 		}
+// 	}
+// 	wg.Wait()
+// 	// combine events and logs
+
+// }
+
+// //insertChainConcurrent for test concurrent execute tx
+// func (bc *BlockChain) insertChainConcurrent(chain types.Blocks) (int, []interface{}, []*types.Log, error) {
+// 	if len(chain) == 0 {
+// 		return 0, nil, nil, nil
+// 	}
+
+// 	// Do a sanity check that the provided chain is actually ordered and linked
+// 	for i := 1; i < len(chain); i++ {
+// 		if chain[i].NumberU64() != chain[i-1].NumberU64()+1 || chain[i].ParentHash() != chain[i-1].Hash() {
+// 			// Chain broke ancestry, log a message (programming error) and skip insertion
+// 			log.WithFields(log.Fields{
+// 				"number":     chain[i].NumberU64(),
+// 				"hash":       chain[i].Hash().String(),
+// 				"parent":     chain[i].ParentHash().String(),
+// 				"prevnumber": chain[i-1].NumberU64(),
+// 				"prevhash":   chain[i-1].Hash().String(),
+// 			}).Error("Non contiguous block insert")
+
+// 			return 0, nil, nil, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, chain[i-1].NumberU64(),
+// 				chain[i-1].Hash().Bytes()[:4], i, chain[i].NumberU64(), chain[i].Hash().Bytes()[:4], chain[i].ParentHash().Bytes()[:4])
+// 		}
+// 	}
+
+// 	// Do a sanity check that the provided chain is actually ordered and linked
+// 	for i := 1; i < len(chain); i++ {
+// 		if chain[i].NumberU64() != chain[i-1].NumberU64()+1 || chain[i].ParentHash() != chain[i-1].Hash() {
+// 			// Chain broke ancestry, log a message (programming error) and skip insertion
+// 			log.WithFields(log.Fields{
+// 				"number":     chain[i].NumberU64(),
+// 				"hash":       chain[i].Hash().String(),
+// 				"parent":     chain[i].ParentHash().String(),
+// 				"prevnumber": chain[i-1].NumberU64(),
+// 				"prevhash":   chain[i-1].Hash().String(),
+// 			}).Error("Non contiguous block insert")
+
+// 			return 0, nil, nil, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, chain[i-1].NumberU64(),
+// 				chain[i-1].Hash().Bytes()[:4], i, chain[i].NumberU64(), chain[i].Hash().Bytes()[:4], chain[i].ParentHash().Bytes()[:4])
+// 		}
+// 	}
+
+// 	bc.wg.Add(1)
+// 	defer bc.wg.Done()
+
+// 	bc.chainmu.Lock()
+// 	defer bc.chainmu.Unlock()
+
+// 	// Append a single chain head event if we've progressed the chain
+// 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
+// 		events = append(events, ChainHeadEvent{lastCanon})
+// 	}
+// 	return 0, events, coalescedLogs, nil
+// }
+
 func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*types.Log, error) {
 	if len(chain) == 0 {
 		return 0, nil, nil, nil
@@ -871,7 +1049,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		}
 
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
+		t1 := time.Now()
+		//receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
+		receipts, logs, usedGas, err := bc.processor.ProcessConcurrent(2, block, state, bc.vmConfig)
+		t2 := time.Now()
+		fmt.Println("***********bc.processor.Process block[", i, "]  spend time.", t2.Sub(t1))
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}

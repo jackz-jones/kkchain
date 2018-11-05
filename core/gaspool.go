@@ -21,6 +21,8 @@ func (gp *GasPool) AddGas(amount uint64) *GasPool {
 // SubGas deducts the given amount from the pool if enough gas is
 // available and returns an error otherwise.
 func (gp *GasPool) SubGas(amount uint64) error {
+	a := uint64(*gp)
+	a = a
 	if uint64(*gp) < amount {
 		return ErrGasLimitReached
 	}

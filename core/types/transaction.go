@@ -155,13 +155,15 @@ func (tx *Transaction) Hash() common.Hash {
 // XXX Rename message to something less arbitrary?
 func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
-		nonce:      tx.data.Nonce,
-		gasLimit:   tx.data.GasLimit,
-		gasPrice:   new(big.Int).Set(tx.data.GasPrice),
-		to:         tx.data.Receiver,
-		amount:     tx.data.Amount,
-		data:       tx.data.Payload,
-		checkNonce: true,
+		nonce:    tx.data.Nonce,
+		gasLimit: tx.data.GasLimit,
+		gasPrice: new(big.Int).Set(tx.data.GasPrice),
+		to:       tx.data.Receiver,
+		amount:   tx.data.Amount,
+		data:     tx.data.Payload,
+		//checkNonce: true,
+		//cancel msg.checknonce for concurrent execute test.add by lmh 20181101
+		checkNonce: false,
 	}
 
 	var err error
