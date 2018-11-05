@@ -2,28 +2,24 @@
 # For more information, see https://github.com/toml-lang/toml
 
 ##### general config options #####
+# Path to store blockchain data
 datadir = "data"
-
-##### advanced configuration options #####
 
 ##### consensus configuration options #####
 [consensus]
 # Enable mining
-mine = true
+mine = false
 # Consensus type
 type = "pow"
-
+# Miner address
 #coinbase = "37fc69c6e656f94a142ce8878c045704a5cd6520"
 
 ##### p2p server configuration options #####
 [network]
-
 # Address to listen for incoming connections
 listen = "/ip4/127.0.0.1/tcp/9998"
-
 # Comma separated list of seed nodes to connect to
 seeds = ["89b8bb2b66a41220a9b8ba8f019c291dc69c8d9b1ee023813f9db8f8bdcd1f76@/ip4/127.0.0.1/tcp/9998"]
-
 # Network private key file path
 privatekey = "node1.key"
 
@@ -36,12 +32,8 @@ bucketsize = 2
 [api]
 # Enable rpc
 rpc = true
-
 # RPC service modules
 rpcmodules = ["kkc","personal","miner"]
-
 # Address to listen for incoming connections
 rpcaddr = "/ip4/127.0.0.1/tcp/8545"
-
-[acc]
 
