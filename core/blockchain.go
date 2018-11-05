@@ -851,6 +851,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 				return i, events, coalescedLogs, err
 			}
 		case err != nil:
+			log.WithFields(log.Fields{
+				"index":     i,
+				"blockNum":  block.NumberU64(),
+				"blockHash": block.Hash().String(),
+				"txCount":   len(block.Transactions()),
+			}).Error("block is invalid")
 			return i, events, coalescedLogs, err
 		}
 
