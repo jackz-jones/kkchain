@@ -192,12 +192,12 @@ func consensusConfig(ctx *cli.Context, cfg *config.ConsensusConfig) {
 		cfg.Mine = ctx.GlobalBool(ConsensusMineFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(ConsensusMineFlag.Name) {
+	if ctx.GlobalIsSet(ConsensusTypeFlag.Name) {
 		cfg.Type = ctx.GlobalString(ConsensusTypeFlag.Name)
 	}
 
 	if ctx.GlobalIsSet(ConsensusCoinbaseFlag.Name) {
-		cfg.Type = ctx.GlobalString(ConsensusCoinbaseFlag.Name)
+		cfg.Coinbase = ctx.GlobalString(ConsensusCoinbaseFlag.Name)
 	}
 
 }
