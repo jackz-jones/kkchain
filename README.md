@@ -38,32 +38,32 @@ description for the command parameters:
 **NOTE：** If you run node without any command parameter, the node will start with followinf default config:
 ```
 var (
-    DefaultGeneralConfig = GeneralConfig{
-        DataDir: DefaultDataDir(),
-    }
-
-    seeds                = []string{"89b8bb2b66a41220a9b8ba8f019c291dc69c8d9b1ee023813f9db8f8bdcd1f76@/ip4/127.0.0.1/tcp/9998"}
-    DefaultNetworkConfig = NetworkConfig{
-        Listen:     "/ip4/127.0.0.1/tcp/9998",
-        PrivateKey: "node1.key",
-        NetworkId:  1,
-        MaxPeers:   20,
-        Seeds:      seeds,
-    }
-
-    DefaultDhtConfig = DhtConfig{
-        BucketSize: 16,
-    }
-
-    DefaultConsensusConfig = ConsensusConfig{
-        Mine: false,
-        Type: "pow",
-    }
-
-    DefaultAPIConfig = ApiConfig{
-        Rpc:     false,
-        RpcAddr: "/ip4/127.0.0.1/tcp/8545",
-    }
+        DefaultGeneralConfig = GeneralConfig{
+    		DataDir: DefaultDataDir(),
+    	}
+    
+    	DefaultNetworkConfig = NetworkConfig{
+    		Listen:     "/ip4/127.0.0.1/tcp/9998",
+    		PrivateKey: "node1.key",
+    		NetworkId:  1,
+    		MaxPeers:   20,
+    		Seeds:      []string{"89b8bb2b66a41220a9b8ba8f019c291dc69c8d9b1ee023813f9db8f8bdcd1f76@/ip4/127.0.0.1/tcp/9998"},
+    	}
+    
+    	DefaultDhtConfig = DhtConfig{
+    		BucketSize: 16,
+    	}
+    
+    	DefaultConsensusConfig = ConsensusConfig{
+    		Mine: false,
+    		Type: "pow",
+    	}
+    
+    	DefaultAPIConfig = ApiConfig{
+    		Rpc:        false,
+    		RpcModules: []string{"kkc"},
+    		RpcAddr:    "/ip4/127.0.0.1/tcp/8545",
+    	}
 )
 ```
 **And if you want to run multiple nodes at local, should keep following parameters different:**
