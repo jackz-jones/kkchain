@@ -39,7 +39,7 @@ func SignTx(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, err
 // signing method. The cache is invalidated if the cached signer does
 // not match the signer used in the current call.
 func Sender(signer Signer, tx *Transaction) (common.Address, error) {
-	if sc := tx.from.Load(); sc != nil {
+	if sc := tx.Txfrom.Load(); sc != nil {
 		sigCache := sc.(sigCache)
 		// If the signer used to derive from in a previous
 		// call is not the same as used current, invalidate
@@ -53,7 +53,7 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 	if err != nil {
 		return common.Address{}, err
 	}
-	tx.from.Store(sigCache{signer: signer, from: addr})
+	tx.Txfrom.Store(sigCache{signer: signer, from: addr})
 	return addr, nil
 }
 
@@ -98,9 +98,9 @@ func (s InitialSigner) Sender(tx *Transaction) (common.Address, error) {
 		return common.Address{}, ErrInvalidChainId
 	}
 
-	V := new(big.Int).Sub(tx.data.V, s.chainIdMul)
+	V := new(big.Int).Sub(tx.TxData.V, s.chainIdMul)
 	V.Sub(V, big8)
-	return recoverPlain(s.Hash(tx), tx.data.R, tx.data.S, V)
+	return recoverPlain(s.Hash(tx), tx.TxData.R, tx.TxData.S, V)
 }
 
 // WithSignature returns a new transaction with the given signature. This signature
@@ -125,12 +125,12 @@ func (s InitialSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 // It does not uniquely identify the transaction.
 func (s InitialSigner) Hash(tx *Transaction) common.Hash {
 	return rlpHash([]interface{}{
-		tx.data.Nonce,
-		tx.data.GasPrice,
-		tx.data.GasLimit,
-		tx.data.Receiver,
-		tx.data.Amount,
-		tx.data.Payload,
+		tx.TxData.Nonce,
+		tx.TxData.GasPrice,
+		tx.TxData.GasLimit,
+		tx.TxData.Receiver,
+		tx.TxData.Amount,
+		tx.TxData.Payload,
 		s.chainId, uint(0), uint(0),
 	})
 }
