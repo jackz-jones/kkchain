@@ -286,7 +286,6 @@ func (dht *DHT) loadBootstrapNodes() {
 		// check the seed is not self
 		self := hex.EncodeToString(dht.host.ID().PublicKey) + "@" + dht.host.ID().Address
 		if addr == self {
-			log.Warn("refuse to load self to dht table")
 			continue
 		}
 

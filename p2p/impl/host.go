@@ -8,6 +8,7 @@ import (
 	"github.com/invin/kkchain/p2p"
 	"github.com/invin/kkchain/p2p/dht"
 	"github.com/invin/kkchain/p2p/handshake"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -250,6 +251,10 @@ func (h *Host) Connect(address string) (p2p.Conn, error) {
 	addr, err := dht.ToNetAddr(address)
 	if err != nil {
 		return nil, err
+	}
+
+	if h.id.Address == address {
+		return nil, errors.New("refuse to connect self")
 	}
 
 	// Dial remote peer
