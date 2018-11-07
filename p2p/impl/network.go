@@ -13,8 +13,6 @@ import (
 	"github.com/invin/kkchain/p2p/chain"
 	"github.com/invin/kkchain/p2p/dht"
 
-	"encoding/hex"
-
 	"github.com/jbenet/goprocess"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -203,14 +201,6 @@ func (n *Network) bootstrap(p goprocess.Process) {
 		case <-p.Closing():
 			return
 		default:
-
-			// check the seed is not self
-			self := hex.EncodeToString(n.host.ID().PublicKey) + "@" + n.host.ID().Address
-			if node == self {
-				log.Warn("refuse to connect self")
-			} else {
-				log.Infof("ready to connect %s", node)
-			}
 		}
 
 		// Parse peer address to get IP
@@ -233,7 +223,10 @@ func (n *Network) bootstrap(p goprocess.Process) {
 		go func() {
 			_, err := n.host.Connect(peer.Address)
 			if err != nil {
-				log.Errorf("failed to connect boost node: %s", peer.String())
+				log.WithFields(log.Fields{
+					"peer":  peer.String(),
+					"error": err,
+				}).Error("failed to connect boost node")
 				return
 			}
 		}()

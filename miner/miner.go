@@ -114,6 +114,10 @@ func (m *Miner) SetMiner(addr common.Address) {
 	m.worker.setMiner(addr)
 }
 
+func (m *Miner) GetMiner() common.Address {
+	return m.worker.miner
+}
+
 // PendingBlock returns the currently pending block.
 //
 // Note, to access both the pending block and the pending state

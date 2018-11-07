@@ -266,7 +266,7 @@ func (p *peer) requestHeadersByHash(origin common.Hash, amount int, skip int, re
 	return p.conn.SendChainMsg(int32(Message_GET_BLOCK_HEADERS), msg)
 }
 
-// requestBlocksByHash fetchs blocks with hashes 
+// requestBlocksByHash fetchs blocks with hashes
 func (p *peer) requestBlocksByHash(hashes []common.Hash) error {
 	log.Debugf("Fetching %d blocks", len(hashes))
 	temp := [][]byte{}

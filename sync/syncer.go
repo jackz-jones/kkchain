@@ -164,7 +164,7 @@ func (s *Syncer) Enqueue(peer string, block *types.Block) error {
 func (s *Syncer) DeliverHeaders(id string, headers []*types.Header) (err error) {
 	// Currently, only fetching block is supported, so it's unnecessary to forward
 	// headers to the fetcher. If header and body are fetched separately in the future,
-	// we can forward headers to the fetcher.	
+	// we can forward headers to the fetcher.
 	if len(headers) > 0 {
 		return s.downloader.DeliverHeaders(id, headers)
 	}
@@ -180,7 +180,7 @@ func (s *Syncer) DeliverBlocks(id string, blocks []*types.Block, fetched bool) (
 		log.Warnf("Remain %d blocks after filtering", len(remainBlocks))
 		return nil
 	}
-	
+
 	return s.downloader.DeliverBlocks(id, blocks)
 }
 

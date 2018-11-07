@@ -16,6 +16,7 @@ import (
 	"github.com/invin/kkchain/params"
 	"github.com/invin/kkchain/rpc"
 	"github.com/invin/kkchain/storage"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -171,7 +172,17 @@ func NewPrivateMinerAPI(n *Node) *PrivateMinerAPI {
 // this process. If mining is already running, this method adjust the number of
 // threads allowed to use and updates the minimum price required by the transaction
 // pool.
-func (api *PrivateMinerAPI) Start(threads *int) {
+func (api *PrivateMinerAPI) Start(threads *int) error {
+	emptyHash := common.Address{}
+	if len(api.n.accman.Wallets()) == 0 {
+		return errors.New("please create account firstly")
+	}
+
+	// set the first account as miner by default
+	if api.n.miner.GetMiner() == emptyHash {
+		api.n.miner.SetMiner(api.n.accman.Wallets()[0].Accounts()[0].Address)
+	}
+
 	// Set the number of threads if the seal engine supports it
 	if threads == nil {
 		threads = new(int)
@@ -189,6 +200,7 @@ func (api *PrivateMinerAPI) Start(threads *int) {
 	if !api.n.Miner().Mining() {
 		api.n.Miner().Start()
 	}
+	return nil
 }
 
 // Stop the miner

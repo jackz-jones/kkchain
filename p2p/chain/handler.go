@@ -469,7 +469,7 @@ func (c *Chain) handleGetBlocks(ctx context.Context, p p2p.ID, pmes *Message) (_
 	}
 
 	blocks := []*types.Block{}
-	
+
 	for i := msg.StartNum; i <= msg.StartNum+msg.Amount; i++ {
 		block := c.blockchain.GetBlockByNumber(i)
 		if block == nil {
@@ -478,8 +478,8 @@ func (c *Chain) handleGetBlocks(ctx context.Context, p p2p.ID, pmes *Message) (_
 		}
 		blocks = append(blocks, block)
 	}
-	
-	return c.buildBlocksMsg(Message_BLOCKS, blocks)	
+
+	return c.buildBlocksMsg(Message_BLOCKS, blocks)
 }
 
 func (c *Chain) handleFetchBlocks(ctx context.Context, p p2p.ID, pmes *Message) (_ *Message, err error) {
@@ -489,7 +489,7 @@ func (c *Chain) handleFetchBlocks(ctx context.Context, p p2p.ID, pmes *Message) 
 	}
 
 	blocks := []*types.Block{}
-	
+
 	for _, hash := range msg.Hashes {
 		temp := common.BytesToHash(hash)
 		block := c.blockchain.GetBlockByHash(temp)
@@ -500,9 +500,9 @@ func (c *Chain) handleFetchBlocks(ctx context.Context, p p2p.ID, pmes *Message) 
 
 		blocks = append(blocks, block)
 	}
-	
+
 	return c.buildBlocksMsg(Message_BLOCKS_FETCHED, blocks)
-	
+
 }
 
 func (c *Chain) buildBlocksMsg(msgid Message_Type, blocks []*types.Block) (*Message, error) {

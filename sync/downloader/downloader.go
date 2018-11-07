@@ -275,12 +275,21 @@ func (d *Downloader) syncWithPeer(p peer.Peer, hash common.Hash, td *big.Int) (e
 	// Look up the sync boundaries: the common ancestor and the target block
 	latest, err := d.fetchHeight(p)
 	if err != nil {
+		log.WithFields(log.Fields{
+			"peer":  p.ID(),
+			"error": err,
+		}).Error("failed to fetch height")
 		return err
 	}
 
 	height := latest.Number.Uint64()
 	origin, err := d.findAncestor(p, height)
 	if err != nil {
+		log.WithFields(log.Fields{
+			"peer":   p.ID(),
+			"height": height,
+			"error":  err,
+		}).Error("failed to find ancestor")
 		return err
 	}
 
@@ -292,8 +301,23 @@ func (d *Downloader) syncWithPeer(p peer.Peer, hash common.Hash, td *big.Int) (e
 	d.syncStatsChainHeight = height
 	d.syncStatsLock.Unlock()
 
-	if err = d.fetchBlocks(p, origin+1); err == nil {
-		err = d.importBlocks()
+	err = d.fetchBlocks(p, origin+1)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"peer":  p.ID(),
+			"from":  origin + 1,
+			"error": err,
+		}).Error("failed to fetch blocks")
+		return err
+	}
+
+	err = d.importBlocks()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"peer":   p.ID(),
+			"height": height,
+			"error":  err,
+		}).Error("failed to import blocks")
 	}
 
 	return err
@@ -659,10 +683,10 @@ func (d *Downloader) importBlocks() error {
 	// Insert to local blockchain
 	if index, err := d.blockchain.InsertChain(d.pending); err != nil {
 		log.WithFields(log.Fields{
-			"number": d.pending[index].NumberU64,
+			"number": d.pending[index].NumberU64(),
 			"hash":   d.pending[index].Hash().String(),
 			"err":    err,
-		}).Debug("Downloaded item processing failed")
+		}).Error("Downloaded item processing failed")
 		return errInvalidChain
 	}
 

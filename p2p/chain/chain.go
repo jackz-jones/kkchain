@@ -141,7 +141,8 @@ func (c *Chain) Connected(conn p2p.Conn) {
 	}
 	chainID := c.blockchain.ChainID()
 
-	td := currentBlock.Td
+	// td is stored in db, can not get it by currentBlock.Td
+	td := c.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	if td == nil {
 		td = new(big.Int).SetInt64(2)
 	}

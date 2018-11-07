@@ -13,7 +13,6 @@ import (
 	"github.com/invin/kkchain/common"
 	"github.com/invin/kkchain/crypto/sha3"
 	"github.com/invin/kkchain/rlp"
-	"github.com/pkg/errors"
 )
 
 var (
@@ -129,9 +128,6 @@ type storageblock struct {
 
 func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt) *Block {
 	b := &Block{Head: CopyHeader(header), Td: new(big.Int)}
-	if len(txs) != len(receipts) {
-		panic(errors.New(fmt.Sprintf("failed to new block(%d) for the different count between txs and receipts", header.Number.Uint64())))
-	}
 	if len(txs) == 0 {
 		b.Head.TxRoot = EmptyRootHash
 	} else {
