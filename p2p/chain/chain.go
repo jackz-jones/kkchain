@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"math/big"
+	"math/rand"
 
 	"encoding/hex"
 
@@ -25,7 +26,20 @@ var log = logrus.New()
 
 const (
 	protocolChain = "/kkchain/p2p/chain/1.0.0"
+
+	// txChanSize is the size of channel listening to NewTxsEvent.
+	// The number is referenced from the size of tx pool.
+	txChanSize = 4096
+
+	// This is the target size for the packs of transactions sent by txsyncLoop.
+	// A pack can get larger than this if a single transactions exceeds this size.
+	txsyncPackSize = 100 * 1024
 )
+
+type txsync struct {
+	p   *peer
+	txs []*types.Transaction
+}
 
 // Chain implements protocol for chain related messages
 type Chain struct {
@@ -49,6 +63,12 @@ type Chain struct {
 	syncer *sync.Syncer
 
 	quitCh chan struct{}
+
+	// tx sync
+	txsCh    chan core.NewTxsEvent
+	txsSub   event.Subscription
+	txsyncCh chan *txsync
+	quitSync chan struct{}
 }
 
 func init() {
@@ -56,12 +76,15 @@ func init() {
 }
 
 // New creates a new Chain object
-func New(host p2p.Host, bc *core.BlockChain) *Chain {
+func New(host p2p.Host, bc *core.BlockChain, txpool *core.TxPool) *Chain {
 	c := &Chain{
 		host:       host,
 		blockchain: bc,
+		txPool:     txpool,
 		peers:      NewPeerSet(),
 		quitCh:     make(chan struct{}),
+		txsyncCh:   make(chan *txsync),
+		quitSync:   make(chan struct{}),
 	}
 	c.newMinedBlockCh = make(chan core.NewMinedBlockEvent, 256)
 
@@ -130,6 +153,9 @@ func (c *Chain) Connected(conn p2p.Conn) {
 	peer := NewPeer(conn)
 	c.peers.Register(peer)
 
+	// Propagate existing transactions when a new peer connect in
+	c.syncTransactions(peer)
+
 	log.WithFields(logrus.Fields{
 		"remote_address": conn.RemotePeer().Address,
 		"remote_id":      hex.EncodeToString(conn.RemotePeer().PublicKey),
@@ -196,9 +222,9 @@ func (c *Chain) Start(maxPeers int) {
 	c.maxPeers = maxPeers
 
 	// broadcast transactions
-	// pm.txsCh = make(chan core.NewTxsEvent, txChanSize)
-	// pm.txsSub = c.txpool.SubscribeNewTxsEvent(pm.txsCh)
-	// go pm.txBroadcastLoop()
+	c.txsCh = make(chan core.NewTxsEvent, txChanSize)
+	c.txsSub = c.txPool.SubscribeNewTxsEvent(c.txsCh)
+	go c.txBroadcastLoop()
 
 	// broadcast mined blocks
 	c.mineBlockSub = c.blockchain.SubscribeNewMinedBlockEvent(c.newMinedBlockCh)
@@ -206,13 +232,139 @@ func (c *Chain) Start(maxPeers int) {
 
 	// start sync handlers
 	go c.syncer.Start()
-	// go pm.txsyncLoop()
+	go c.txsyncLoop()
+}
+
+func (c *Chain) txBroadcastLoop() {
+	for {
+		select {
+		case event := <-c.txsCh:
+			c.BroadcastTxs(event.Txs)
+
+			// Err() channel will be closed when unsubscribing.
+		case <-c.txsSub.Err():
+			return
+		}
+	}
+}
+
+// BroadcastTxs will propagate a batch of transactions to all peers which are not known to
+// already have the given transaction.
+func (c *Chain) BroadcastTxs(txs types.Transactions) {
+	var txset = make(map[*peer]types.Transactions)
+
+	// Broadcast transactions to a batch of peers not knowing about it
+	for _, tx := range txs {
+		peers := c.peers.PeersWithoutTx(tx.Hash())
+		for _, peer := range peers {
+			txset[peer] = append(txset[peer], tx)
+		}
+		log.WithFields(logrus.Fields{
+			"hash":       tx.Hash().String(),
+			"recipients": len(peers),
+		}).Info("Broadcast transaction")
+	}
+	// FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
+	for peer, txs := range txset {
+		peer.AsyncSendTransactions(txs)
+	}
+}
+
+// syncTransactions starts sending all currently pending transactions to the given peer.
+func (c *Chain) syncTransactions(p *peer) {
+	var txs types.Transactions
+	pending, _, _ := c.txPool.Pending()
+	for _, batch := range pending {
+		txs = append(txs, batch...)
+	}
+	if len(txs) == 0 {
+		return
+	}
+	select {
+	case c.txsyncCh <- &txsync{p, txs}:
+	case <-c.quitSync:
+	}
+}
+
+// txsyncLoop takes care of the initial transaction sync for each new
+// connection. When a new peer appears, we relay all currently pending
+// transactions. In order to minimise egress bandwidth usage, we send
+// the transactions in small packs to one peer at a time.
+func (c *Chain) txsyncLoop() {
+	var (
+		pending = make(map[string]*txsync)
+		sending = false               // whether a send is active
+		pack    = new(txsync)         // the pack that is being sent
+		done    = make(chan error, 1) // result of the send
+	)
+
+	// send starts a sending a pack of transactions from the sync.
+	send := func(s *txsync) {
+		// Fill pack with transactions up to the target size.
+		size := common.StorageSize(0)
+		pack.p = s.p
+		pack.txs = pack.txs[:0]
+		for i := 0; i < len(s.txs) && size < txsyncPackSize; i++ {
+			pack.txs = append(pack.txs, s.txs[i])
+			size += s.txs[i].Size()
+		}
+		// Remove the transactions that will be sent.
+		s.txs = s.txs[:copy(s.txs, s.txs[len(pack.txs):])]
+		if len(s.txs) == 0 {
+			delete(pending, s.p.ID)
+		}
+		// Send the pack in the background.
+		log.WithFields(logrus.Fields{
+			"count": len(pack.txs),
+			"bytes": size,
+		}).Info("Sending batch of transactions")
+		sending = true
+		go func() { done <- pack.p.SendTransactions(pack.txs) }()
+	}
+
+	// pick chooses the next pending sync.
+	pick := func() *txsync {
+		if len(pending) == 0 {
+			return nil
+		}
+		n := rand.Intn(len(pending)) + 1
+		for _, s := range pending {
+			if n--; n == 0 {
+				return s
+			}
+		}
+		return nil
+	}
+
+	for {
+		select {
+		case s := <-c.txsyncCh:
+			pending[s.p.ID] = s
+			if !sending {
+				send(s)
+			}
+		case err := <-done:
+			sending = false
+			// Stop tracking peers that cause send failures.
+			if err != nil {
+				log.Debugf("Transaction send failed,err: %v", err)
+				delete(pending, pack.p.ID)
+			}
+			// Schedule the next send.
+			if s := pick(); s != nil {
+				send(s)
+			}
+		case <-c.quitSync:
+			return
+		}
+	}
 }
 
 func (c *Chain) Stop() {
 	close(c.quitCh)
 	c.syncer.Stop()
-	//pm.txsSub.Unsubscribe()        // quits txBroadcastLoop
+	c.txsSub.Unsubscribe() // quits txBroadcastLoop
+	close(c.quitSync)
 	c.mineBlockSub.Unsubscribe() // quits blockBroadcastLoop
 	c.peers.Close()
 }

@@ -293,6 +293,11 @@ func (c *Chain) handleBlockHeaders(ctx context.Context, p p2p.ID, pmes *Message)
 }
 
 func (c *Chain) handleTransactions(ctx context.Context, p p2p.ID, pmes *Message) (_ *Message, err error) {
+	// Transactions arrived, make sure we have a valid and fresh chain to handle them
+	//if atomic.LoadUint32(&c.acceptTxs) == 0 {
+	//	return nil, nil
+	//}
+
 	msg := pmes.DataMsg
 	if msg == nil {
 		return nil, errEmptyMsgContent
@@ -305,7 +310,16 @@ func (c *Chain) handleTransactions(ctx context.Context, p p2p.ID, pmes *Message)
 		return nil, err
 	}
 
-	// TODO: execute received tx ..
+	// Transactions can be processed, parse all of them and deliver to the pool
+	for i, tx := range txs {
+		// Validate and mark the remote transaction
+		if tx == nil {
+			return nil, errors.Errorf("transaction %d is nil", i)
+		}
+		id := hex.EncodeToString(p.PublicKey)
+		c.peers.Peer(id).MarkTransactions(tx.Hash())
+	}
+	c.txPool.AddRemotes(txs)
 
 	// no resp
 	return nil, nil

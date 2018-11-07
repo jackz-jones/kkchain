@@ -58,7 +58,7 @@ func DefaultConfig() p2p.Config {
 }
 
 // NewNetwork creates a new Network instance with the specified configuration
-func NewNetwork(networkConfig *config.NetworkConfig, dhtConfig *config.DhtConfig, bc *core.BlockChain) *Network {
+func NewNetwork(networkConfig *config.NetworkConfig, dhtConfig *config.DhtConfig, bc *core.BlockChain, txpool *core.TxPool) *Network {
 	keys, _ := p2p.LoadNodeKeyFromFileOrCreateNew(networkConfig.PrivateKey)
 	id := p2p.CreateID(networkConfig.Listen, keys.PublicKey)
 
@@ -73,7 +73,7 @@ func NewNetwork(networkConfig *config.NetworkConfig, dhtConfig *config.DhtConfig
 	n.host = NewHost(id, n, networkConfig.MaxPeers)
 
 	// Create submodules
-	n.chain = chain.New(n.host, n.bc)
+	n.chain = chain.New(n.host, n.bc, txpool)
 	n.dht = dht.New(dhtConfig, n.host)
 
 	return n
