@@ -329,6 +329,13 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local bool) []error {
 	return pool.addTxsLocked(txs, local)
 }
 
+// AddRemotes enqueues a batch of transactions into the pool if they are valid.
+// If the senders are not among the locally tracked ones, full pricing constraints
+// will apply.
+func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error {
+	return pool.addTxs(txs, false)
+}
+
 // AddLocals enqueues a batch of transactions into the pool if they are valid,
 // marking the senders as a local ones in the mean time, ensuring they go around
 // the local pricing constraints.

@@ -13,6 +13,7 @@ import (
 	"github.com/invin/kkchain/p2p/chain"
 	"github.com/invin/kkchain/p2p/dht"
 
+	"github.com/invin/kkchain/sync"
 	"github.com/jbenet/goprocess"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -39,7 +40,7 @@ type Network struct {
 
 	// Message modules
 	dht   *dht.DHT
-	chain *chain.Chain
+	chain sync.SyncBuddy
 
 	// Bootstrap seed nodes
 	bootstrapNodes []string
@@ -58,7 +59,7 @@ func DefaultConfig() p2p.Config {
 }
 
 // NewNetwork creates a new Network instance with the specified configuration
-func NewNetwork(networkConfig *config.NetworkConfig, dhtConfig *config.DhtConfig, bc *core.BlockChain) *Network {
+func NewNetwork(networkConfig *config.NetworkConfig, dhtConfig *config.DhtConfig, bc *core.BlockChain, txpool *core.TxPool) *Network {
 	keys, _ := p2p.LoadNodeKeyFromFileOrCreateNew(networkConfig.PrivateKey)
 	id := p2p.CreateID(networkConfig.Listen, keys.PublicKey)
 
@@ -73,7 +74,7 @@ func NewNetwork(networkConfig *config.NetworkConfig, dhtConfig *config.DhtConfig
 	n.host = NewHost(id, n, networkConfig.MaxPeers)
 
 	// Create submodules
-	n.chain = chain.New(n.host, n.bc)
+	n.chain = chain.New(n.host, n.bc, txpool)
 	n.dht = dht.New(dhtConfig, n.host)
 
 	return n
@@ -132,6 +133,10 @@ func (n *Network) Start() error {
 // Conf gets configurations
 func (n *Network) Conf() p2p.Config {
 	return n.conf
+}
+
+func (n *Network) Chain() sync.SyncBuddy {
+	return n.chain
 }
 
 // Bootstraps returns seed nodes

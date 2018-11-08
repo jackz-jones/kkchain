@@ -3,6 +3,7 @@ package types
 import (
 	"container/heap"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"sync/atomic"
@@ -107,6 +108,23 @@ func (tx *Transaction) Receiver() *common.Address {
 	}
 	to := *tx.TxData.Receiver
 	return &to
+}
+
+func (tx *Transaction) String() string {
+	from, _ := Sender(NewInitialSigner(tx.ChainId()), tx)
+	str := fmt.Sprintf(`
+	{
+		hash: %s
+		nonce: %d
+		from: %s
+		receiver: %s
+		value: %d
+		gaslimit: %d
+		gasprice: %d
+		totalcost: %d
+        size: %s
+	}`+"\n", tx.Hash().String(), tx.Nonce(), from.String(), tx.Receiver().String(), tx.Value().Uint64(), tx.GasLimit(), tx.GasPrice().Uint64(), tx.Cost().Uint64(), tx.Size().String())
+	return str
 }
 
 // EncodeRLP implements rlp.Encoder

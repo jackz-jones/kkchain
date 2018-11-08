@@ -94,7 +94,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	exp := 0
 	var blockPrices []*big.Int
 	for sent < gpo.checkBlocks && blockNum > 0 {
-		go gpo.getBlockPrices(ctx, types.NewInitialSigner(big.NewInt(int64(blockNum))), blockNum, ch)
+		go gpo.getBlockPrices(ctx, types.NewInitialSigner((gpo.backend.ChainConfig().ChainID)), blockNum, ch)
 		sent++
 		exp++
 		blockNum--
@@ -115,7 +115,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 			continue
 		}
 		if blockNum > 0 && sent < gpo.maxBlocks {
-			go gpo.getBlockPrices(ctx, types.NewInitialSigner(big.NewInt(int64(blockNum))), blockNum, ch)
+			go gpo.getBlockPrices(ctx, types.NewInitialSigner((gpo.backend.ChainConfig().ChainID)), blockNum, ch)
 			sent++
 			exp++
 			blockNum--

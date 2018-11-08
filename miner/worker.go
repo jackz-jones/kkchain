@@ -115,8 +115,9 @@ func (w *worker) mineLoop() {
 	for {
 		select {
 		case txs := <-w.txsCh:
+			fmt.Printf("\n\nreceive new txs: \n")
 			for _, tx := range txs.Txs {
-				fmt.Println(tx)
+				fmt.Println(tx.String())
 			}
 		case <-w.chainHeadCh:
 			if w.isRunning() {

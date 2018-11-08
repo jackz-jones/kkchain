@@ -5,6 +5,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/invin/kkchain/crypto"
+	"github.com/invin/kkchain/sync"
 	"github.com/jbenet/goprocess"
 )
 
@@ -43,6 +44,8 @@ type Network interface {
 
 	// Main process
 	Proc() goprocess.Process
+
+	Chain() sync.SyncBuddy
 }
 
 // Conn wraps connection related operations, such as reading and writing

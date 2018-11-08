@@ -198,7 +198,7 @@ func (api *PrivateMinerAPI) Start(threads *int) error {
 	}
 	// Start the miner and return
 	if !api.n.Miner().Mining() {
-		api.n.Miner().Start()
+		api.n.SartMining(true)
 	}
 	return nil
 }
