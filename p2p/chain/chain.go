@@ -153,6 +153,7 @@ func (c *Chain) Connected(conn p2p.Conn) {
 	peer := NewPeer(conn)
 	c.peers.Register(peer)
 
+	// TODO: send existing tx for more times ??? only once now, maybe the peer has not set 'acceptTxs'
 	// Propagate existing transactions when a new peer connect in
 	c.syncTransactions(peer)
 

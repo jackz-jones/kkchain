@@ -160,7 +160,7 @@ func (n *Node) Coinbase() (eb common.Address, err error) {
 			log.Errorf("failed to new a initial account: %v", err)
 		}
 	}
-	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
+	return common.Address{}, fmt.Errorf("coinbase must be explicitly specified")
 }
 
 func (n *Node) SetCoinbase(coinbase common.Address) {
@@ -169,6 +169,26 @@ func (n *Node) SetCoinbase(coinbase common.Address) {
 	n.lock.Unlock()
 
 	n.miner.SetMiner(coinbase)
+}
+
+func (n *Node) SartMining(local bool) error {
+	cb, err := n.Coinbase()
+	if err != nil {
+		log.Errorf("Cannot start mining without etherbase,err: %v", err)
+		return fmt.Errorf("coinbase missing: %v", err)
+	}
+
+	n.SetCoinbase(cb)
+
+	if local {
+		// If local (CPU) mining is started, we can disable the transaction rejection
+		// mechanism introduced to speed sync times. CPU mining on mainnet is ludicrous
+		// so none will ever hit this path, whereas marking sync done on CPU mining
+		// will ensure that private networks work in single miner mode too.
+		n.network.Chain().AcceptTxs()
+	}
+	go n.miner.Start()
+	return nil
 }
 
 func (n *Node) Start() {
@@ -189,12 +209,9 @@ func (n *Node) Start() {
 	}()
 
 	if n.config.Consensus.Mine {
-		coinbase, err := n.Coinbase()
-		if err == nil {
-			n.miner.SetMiner(coinbase)
-			n.miner.Start()
-		} else {
-			log.Errorf("can not mine: %v", err)
+		err := n.SartMining(true)
+		if err != nil {
+			log.Errorf("failed to start mining,err: %v", err)
 		}
 	}
 

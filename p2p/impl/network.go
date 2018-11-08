@@ -13,6 +13,7 @@ import (
 	"github.com/invin/kkchain/p2p/chain"
 	"github.com/invin/kkchain/p2p/dht"
 
+	"github.com/invin/kkchain/sync"
 	"github.com/jbenet/goprocess"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -39,7 +40,7 @@ type Network struct {
 
 	// Message modules
 	dht   *dht.DHT
-	chain *chain.Chain
+	chain sync.SyncBuddy
 
 	// Bootstrap seed nodes
 	bootstrapNodes []string
@@ -132,6 +133,10 @@ func (n *Network) Start() error {
 // Conf gets configurations
 func (n *Network) Conf() p2p.Config {
 	return n.conf
+}
+
+func (n *Network) Chain() sync.SyncBuddy {
+	return n.chain
 }
 
 // Bootstraps returns seed nodes

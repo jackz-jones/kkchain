@@ -2,6 +2,7 @@ package chain
 
 import (
 	"context"
+	"sync/atomic"
 
 	"bytes"
 
@@ -293,10 +294,11 @@ func (c *Chain) handleBlockHeaders(ctx context.Context, p p2p.ID, pmes *Message)
 }
 
 func (c *Chain) handleTransactions(ctx context.Context, p p2p.ID, pmes *Message) (_ *Message, err error) {
+
 	// Transactions arrived, make sure we have a valid and fresh chain to handle them
-	//if atomic.LoadUint32(&c.acceptTxs) == 0 {
-	//	return nil, nil
-	//}
+	if atomic.LoadUint32(&c.acceptTxs) == 0 {
+		return nil, nil
+	}
 
 	msg := pmes.DataMsg
 	if msg == nil {
@@ -484,7 +486,7 @@ func (c *Chain) handleGetBlocks(ctx context.Context, p p2p.ID, pmes *Message) (_
 
 	blocks := []*types.Block{}
 
-	for i := msg.StartNum; i <= msg.StartNum+msg.Amount; i++ {
+	for i := msg.StartNum; i < msg.StartNum+msg.Amount; i++ {
 		block := c.blockchain.GetBlockByNumber(i)
 		if block == nil {
 			log.Warnf("Failed to get block %d", i)

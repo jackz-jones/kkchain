@@ -49,6 +49,8 @@ type SyncBuddy interface {
 	BroadcastBlock(block *types.Block, propagate bool)
 	AcceptTxs()
 	RemovePeer(id string)
+	Start(peers int)
+	Stop()
 }
 
 // New creates a new syncer object
