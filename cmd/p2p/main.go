@@ -49,7 +49,7 @@ func main() {
 		config.DefaultDhtConfig.Seeds = []string{node}
 	}
 
-	net := impl.NewNetwork(&config.DefaultNetworkConfig, &config.DefaultDhtConfig, nil)
+	net := impl.NewNetwork(&config.DefaultNetworkConfig, &config.DefaultDhtConfig, nil, nil)
 	err := net.Start()
 	if err != nil {
 		fmt.Printf("failed to start server: %s\n", err)
