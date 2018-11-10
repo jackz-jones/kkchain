@@ -69,7 +69,7 @@ func New(buddy SyncBuddy, bc *core.BlockChain) *Syncer {
 		status:     Stopped,
 		buddy:      buddy,
 		blockchain: bc,
-		downloader: downloader.New(bc, buddy.Peers()),
+		downloader: downloader.New(bc, buddy.Peers(), buddy.RemovePeer),
 		fetcher:    fetcher.New(bc.GetBlockByHash, validator, buddy.BroadcastBlock, heighter, inserter, buddy.RemovePeer),
 	}
 }

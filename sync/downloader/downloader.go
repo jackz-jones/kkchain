@@ -177,13 +177,15 @@ type Downloader struct {
 }
 
 // New creates a downloader object
-func New(blockchain BlockChain, ps peer.PeerSet) *Downloader {
+func New(blockchain BlockChain, ps peer.PeerSet, dropPeer peer.PeerDropFn) *Downloader {
 	return &Downloader{
 		blockchain: blockchain,
 		ps:         ps,
+		dropPeer:   dropPeer,
 		headerCh:   make(chan dataPack, 1),
 		blockCh:    make(chan dataPack, 1),
 		quitCh:     make(chan struct{}),
+		cancelCh:   make(chan struct{}),
 	}
 }
 
