@@ -53,12 +53,6 @@ type hashOrNumber struct {
 	Number uint64      // Block hash from which to retrieve headers (excludes Hash)
 }
 
-// propEvent is a block propagation, waiting for its turn in the broadcast queue.
-type propEvent struct {
-	block *types.Block
-	td    *big.Int
-}
-
 // newBlockHashesData is the network packet for the block announcements.
 type newBlockHashesData []struct {
 	Hash   common.Hash // Hash of one particular block being announced
@@ -74,7 +68,7 @@ type peer struct {
 	knownTxs    mapset.Set                // Set of transaction hashes known to be known by this peer
 	knownBlocks mapset.Set                // Set of block hashes known to be known by this peer
 	queuedTxs   chan []*types.Transaction // Queue of transactions to broadcast to the peer
-	queuedProps chan *propEvent           // Queue of blocks to broadcast to the peer
+	queuedProps chan *types.Block         // Queue of blocks to broadcast to the peer
 	queuedAnns  chan *types.Block         // Queue of blocks to announce to the peer
 	term        chan struct{}             // Termination channel to stop the broadcaster
 }
@@ -88,7 +82,7 @@ func NewPeer(conn p2p.Conn) *peer {
 		knownTxs:    mapset.NewSet(),
 		knownBlocks: mapset.NewSet(),
 		queuedTxs:   make(chan []*types.Transaction, maxQueuedTxs),
-		queuedProps: make(chan *propEvent, maxQueuedProps),
+		queuedProps: make(chan *types.Block, maxQueuedProps),
 		queuedAnns:  make(chan *types.Block, maxQueuedAnns),
 		term:        make(chan struct{}),
 	}
@@ -116,9 +110,9 @@ func (p *peer) broadcast() {
 				return
 			}
 		case prop := <-p.queuedProps:
-			if err := p.SendNewBlock(prop.block); err != nil {
+			if err := p.SendNewBlock(prop); err != nil {
 				log.WithFields(logrus.Fields{
-					"block_num": prop.block.NumberU64(),
+					"block_num": prop.NumberU64(),
 					"error":     err,
 				}).Error("failed to broadcast new block")
 				return
@@ -206,12 +200,8 @@ func (p *peer) SendNewBlock(block *types.Block) error {
 }
 
 func (p *peer) AsyncSendNewBlock(block *types.Block) {
-	prop := &propEvent{
-		block: block,
-		td:    block.Td,
-	}
 	select {
-	case p.queuedProps <- prop:
+	case p.queuedProps <- block:
 		p.knownBlocks.Add(block.Hash())
 	default:
 		log.WithFields(logrus.Fields{

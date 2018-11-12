@@ -378,6 +378,14 @@ func (c *Chain) minedBroadcastLoop() {
 
 			// fill up td
 			block := newMinedBlockCh.Block
+			parent := c.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+			if parent == nil {
+				log.WithFields(logrus.Fields{
+					"number": block.Number(),
+					"hash":   block.Hash().String(),
+				}).Error("Propagating dangling block")
+				return
+			}
 			if block.Td == nil {
 				parentTD := c.blockchain.GetTd(block.ParentHash(), block.NumberU64()-1)
 				block.Td = new(big.Int).Add(parentTD, block.Difficulty())
@@ -399,38 +407,21 @@ func (c *Chain) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
-		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
-		// var td *big.Int
-		// if parent := c.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-		// 	td = new(big.Int).Add(block.Difficulty(), c.blockchain.GetTd(block.ParentHash(), block.NumberU64()-1))
-		// } else {
-		// 	log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
-		// 	return
-		// }
+
 		// Send the block to a subset of our peers
 		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
 		for _, peer := range transfer {
-			peer.SendNewBlock(block)
+			peer.AsyncSendNewBlock(block)
 		}
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
 	if c.blockchain.HasBlock(hash, block.NumberU64()) {
 		for _, peer := range peers {
-			peer.SendNewBlockHashes([]common.Hash{block.Hash()}, []uint64{block.NumberU64()})
+			peer.AsyncSendNewBlockHash(block)
 		}
 	}
 }
-
-// // Blockchain returns the target blockchain
-// func (c *Chain) Blockchain() {
-// 	return c.blockchain
-// }
-
-// // Peers returns the active peers
-// func (c *Chain) Peers() {
-// 	return c.peers
-// }
 
 // AcceptTxs sets flag on for accepts transactions
 func (c *Chain) AcceptTxs() {

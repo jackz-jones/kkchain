@@ -83,7 +83,7 @@ func newTester() *downloadTester {
 	tester.stateDb.Put(genesis.StateRoot().Bytes(), []byte{0x00})
 
 	// tester.downloader = NewDownloader(FullSync, tester.stateDb, new(event.TypeMux), tester, nil, tester.dropPeer)
-	tester.downloader = New(tester, tester)
+	tester.downloader = New(tester, tester, tester.dropPeer)
 	tester.peers = make(map[string]peer.Peer)
 	return tester
 }

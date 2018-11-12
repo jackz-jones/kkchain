@@ -103,7 +103,7 @@ func doP2P(bc *core.BlockChain, port, keypath string) {
 		config.DefaultDhtConfig.Seeds = []string{node}
 	}
 
-	net := impl.NewNetwork(&config.DefaultNetworkConfig, &config.DefaultDhtConfig, bc)
+	net := impl.NewNetwork(&config.DefaultNetworkConfig, &config.DefaultDhtConfig, bc, nil)
 
 	err := net.Start()
 	if err != nil {
