@@ -7,6 +7,8 @@ import (
 	"github.com/invin/kkchain/core/vm"
 	"github.com/invin/kkchain/crypto"
 	"github.com/invin/kkchain/params"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -49,7 +51,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		if err != nil {
 			return nil, nil, 0, err
 		}
-		//receipt := &types.Receipt{}
 
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
@@ -58,6 +59,61 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	p.bc.engine.Finalize(p.bc, statedb, block)
 
 	return receipts, allLogs, *usedGas, nil
+}
+
+func (p *StateProcessor) ApplyTransactions(txs types.Transactions, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
+
+	var executedTx types.Transactions
+	var receipts types.Receipts
+	gasPool := new(GasPool).AddGas(header.GasLimit)
+	tcount := 0
+
+	for _, tx := range txs {
+		// If we don't have enough gas for any further transactions then we're done
+		if gasPool.Gas() < params.TxGas {
+			log.WithFields(log.Fields{"have": gasPool, "want": params.TxGas}).Debug("Not enough gas for further transactions")
+			break
+		}
+
+		from, _ := types.Sender(types.NewInitialSigner(p.config.ChainID), tx)
+
+		// Start executing the transaction
+		statedb.Prepare(tx.Hash(), common.Hash{}, tcount)
+
+		snap := statedb.Snapshot()
+
+		receipt, _, err := ApplyTransaction(p.config, p.bc, &header.Miner, gasPool, statedb, header, tx, &header.GasUsed, vm.Config{})
+		switch err {
+		case ErrGasLimitReached:
+			// Pop the current out-of-gas transaction without shifting in the next from the account
+			log.Warningf("Gas limit exceeded for current block", "sender", from)
+			statedb.RevertToSnapshot(snap)
+		case ErrNonceTooLow:
+			// New head notification data race between the transaction pool and miner, shift
+			log.Warningf("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			statedb.RevertToSnapshot(snap)
+		case ErrNonceTooHigh:
+			// Reorg notification data race between the transaction pool and miner, skip account =
+			log.Warningf("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			statedb.RevertToSnapshot(snap)
+
+		case nil:
+			// Everything ok, collect the logs and shift in the next transaction from the same account
+			executedTx = append(executedTx, tx)
+			receipts = append(receipts, receipt)
+
+			tcount++
+
+		default:
+			// Strange error, discard the transaction and get the next in line (note, the
+			// nonce-too-high clause will prevent us from executing in vain).
+			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			statedb.RevertToSnapshot(snap)
+		}
+
+	}
+
+	return executedTx, receipts, nil
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database

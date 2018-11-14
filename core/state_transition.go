@@ -66,6 +66,8 @@ func IntrinsicGas(data []byte, contractCreation bool) (uint64, error) {
 	var gas uint64
 	if contractCreation {
 		gas = params.TxGasContractCreation
+	} else {
+		gas = params.TxGas
 	}
 	// Bump the required gas by the amount of transactional data
 	if len(data) > 0 {

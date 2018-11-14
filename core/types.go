@@ -26,4 +26,6 @@ type Validator interface {
 // failed.
 type Processor interface {
 	Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error)
+
+	ApplyTransactions(txs types.Transactions, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error)
 }

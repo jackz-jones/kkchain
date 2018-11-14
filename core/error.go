@@ -40,4 +40,8 @@ var (
 	// ErrNonceTooHigh is returned if the nonce of a transaction is higher than the
 	// next one expected based on the local chain.
 	ErrNonceTooHigh = errors.New("nonce too high")
+
+	ErrAvailGasTooLow = errors.New("available gas too low")
+
+	ErrExecuteTimeout = errors.New("execute timeout")
 )

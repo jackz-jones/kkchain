@@ -289,7 +289,16 @@ func (w *worker) commitTask() {
 
 	if len(txs) > 0 {
 		//apply txs and get block
-		if w.commitTransactions(txs, w.miner) == false {
+		//if w.commitTransactions(txs, w.miner) == false {
+		//	return
+		//}
+
+		if w.currentCtx == nil {
+			return
+		}
+
+		w.currentCtx.txs, w.currentCtx.receipts, err = w.chain.Processor().ApplyTransactions(txs, w.currentCtx.header, w.currentCtx.state)
+		if err != nil {
 			return
 		}
 	}
