@@ -1,6 +1,7 @@
 package state
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -25,6 +26,8 @@ var (
 
 	// emptyCode is the known hash of the empty EVM bytecode.
 	emptyCode = crypto.Keccak256Hash(nil)
+
+	conflictKeyError = errors.New("Conflict key is found when merging statedb!")
 )
 
 type StateDB struct {
@@ -595,4 +598,30 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 	})
 	log.Debugf("trie cache stats after commit,missses: %d,unloads: %d", trie.CacheMisses(), trie.CacheUnloads())
 	return root, err
+}
+
+// Merge inputStatedb into s.stateObjects,and then invoke commit function to update trie
+func (s *StateDB) MergeStateObjects(inputObjects map[common.Address]*stateObject) (err error) {
+	for addr, stateObject := range inputObjects {
+		if s.stateObjects[addr] != nil {
+			for key := range stateObject.cachedStorage {
+				if _, ok := s.stateObjects[addr].cachedStorage[key]; !ok {
+					return conflictKeyError
+				}
+			}
+			for key, value := range stateObject.cachedStorage {
+				s.stateObjects[addr].setState(key, value)
+			}
+			s.stateObjects[addr].CommitTrie(s.db)
+		} else {
+			s.setStateObject(stateObject)
+		}
+	}
+	s.Commit(false)
+	return nil
+}
+
+//GetStateObjects return all stateObject of statedb
+func (s *StateDB) GetStateObjects() (stateObjects map[common.Address]*stateObject) {
+	return s.stateObjects
 }

@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/invin/kkchain/common"
+	"github.com/invin/kkchain/core/dag"
 	"github.com/invin/kkchain/crypto/sha3"
 	"github.com/invin/kkchain/rlp"
 )
@@ -109,6 +110,9 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
+
+	//dag:Transaction execution diagram
+	ExecutionDag *dag.Dag
 }
 
 type StorageBlock Block
@@ -143,6 +147,28 @@ func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt) *Block {
 		b.Head.Bloom = CreateBloom(receipts)
 	}
 
+	return b
+}
+
+//NewBlockWithDag add  for parallel execute
+func NewBlockWithDag(header *Header, txs []*Transaction, receipts []*Receipt, executionDag *dag.Dag) *Block {
+	b := &Block{Head: CopyHeader(header), Td: new(big.Int)}
+	if len(txs) == 0 {
+		b.Head.TxRoot = EmptyRootHash
+	} else {
+		b.Head.TxRoot = DeriveSha(Transactions(txs))
+		b.Txs = make(Transactions, len(txs))
+		copy(b.Txs, txs)
+	}
+
+	if len(receipts) == 0 {
+		b.Head.ReceiptRoot = EmptyRootHash
+	} else {
+		b.Head.ReceiptRoot = DeriveSha(Receipts(receipts))
+		b.Head.Bloom = CreateBloom(receipts)
+	}
+
+	b.ExecutionDag = executionDag
 	return b
 }
 

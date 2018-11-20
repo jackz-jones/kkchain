@@ -8,6 +8,7 @@ import (
 	"github.com/invin/kkchain/consensus"
 
 	// "github.com/invin/kkchain/consensus/misc"
+	"github.com/invin/kkchain/core/dag"
 	"github.com/invin/kkchain/core/state"
 	"github.com/invin/kkchain/core/types"
 
@@ -26,6 +27,8 @@ type BlockGen struct {
 	chainReader consensus.ChainReader
 	header      *types.Header
 	statedb     *state.StateDB
+
+	executionDag *dag.Dag
 
 	gasPool  *GasPool
 	txs      []*types.Transaction
@@ -165,7 +168,12 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 
 		if b.engine != nil {
-			block := types.NewBlock(b.header, b.txs, b.receipts)
+			var block *types.Block
+			if b.executionDag == nil {
+				block = types.NewBlock(b.header, b.txs, b.receipts)
+			} else {
+				block = types.NewBlockWithDag(b.header, b.txs, b.receipts, b.executionDag)
+			}
 			err := b.engine.Finalize(b.chainReader, statedb, block)
 			if err != nil {
 				panic(fmt.Sprintf("finalize block error: %v", err))
@@ -271,4 +279,9 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 // will panic during execution.
 func (b *BlockGen) AddTx(tx *types.Transaction) {
 	b.AddTxWithChain(nil, tx)
+}
+
+//AddExecutionDag adds Transaction execution diagram
+func (b *BlockGen) AddExecutionDag(executionDag *dag.Dag) {
+	b.executionDag = executionDag
 }

@@ -187,6 +187,23 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	return msg, err
 }
 
+//AsMessageWithoutCheckNonce add for parallel execute tx
+func (tx *Transaction) AsMessageWithoutCheckNonce(s Signer) (Message, error) {
+	msg := Message{
+		nonce:      tx.TxData.Nonce,
+		gasLimit:   tx.TxData.GasLimit,
+		gasPrice:   new(big.Int).Set(tx.TxData.GasPrice),
+		to:         tx.TxData.Receiver,
+		amount:     tx.TxData.Amount,
+		data:       tx.TxData.Payload,
+		checkNonce: false,
+	}
+
+	var err error
+	msg.from, err = Sender(s, tx)
+	return msg, err
+}
+
 // WithSignature returns a new transaction with the given signature.
 func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, error) {
 	r, s, v, err := signer.SignatureValues(tx, sig)
