@@ -61,12 +61,19 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return receipts, allLogs, *usedGas, nil
 }
 
-func (p *StateProcessor) ApplyTransactions(txs types.Transactions, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
+func (p *StateProcessor) ApplyTransactions(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
 
 	var executedTx types.Transactions
 	var receipts types.Receipts
 	gasPool := new(GasPool).AddGas(header.GasLimit)
 	tcount := 0
+
+	txs := make(types.Transactions, 0, count)
+	for _, acctxs := range txMaps {
+		for _, tx := range acctxs {
+			txs = append(txs, tx)
+		}
+	}
 
 	for _, tx := range txs {
 		// If we don't have enough gas for any further transactions then we're done
