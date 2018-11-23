@@ -101,7 +101,37 @@ contract Test {
 var (
 	code         = "608060405234801561001057600080fd5b50610119806100206000396000f30060806040526004361060485763ffffffff7c0100000000000000000000000000000000000000000000000000000000600035041663e9a58c408114604d578063f0ba8440146077575b600080fd5b348015605857600080fd5b506065600435602435608c565b60408051918252519081900360200190f35b348015608257600080fd5b50606560043560db565b60408051838301815290516000917f23f54f87f4b5ab78f25d15d4f83e12dc9c218476be07d632a5715acb97dcc736919081900360200190a15001600081815260208190526040902081905590565b600060208190529081526040902054815600a165627a7a723058209b5c72cf00fb85d92c11776d1e24bd7bf9657fd9d6d1300f356e1ac1afbcda280029"
 	codeByteData = common.Hex2Bytes(code)
+	/*
+			合约代码：
+			pragma solidity ^0.4.0;
+		contract Test {
+		    mapping(uint256 => uint256) public data;
+		    uint256 a1;
+		    uint256 a2;
+		    uint256 a3;
+		    event Fun(uint256 c);
+		    function fun(uint256 a,uint256 b) returns(uint256 c){
+		         if(a+b<10){
+		              data[a+b]=a+b;
+		         }
+		         if(a+b==11){
+		             a1=11;
+		         }
+		          if(a+b==12){
+		             a2=12;
+		         }
+		           if(a+b==13){
+		             a3=13;
+		         }
 
+		         emit Fun(a+b);
+		         return a+b;
+
+		    }
+		}
+	*/
+	codeNew         = "608060405234801561001057600080fd5b506101ca806100206000396000f30060806040526004361061004c576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063e9a58c4014610051578063f0ba84401461009c575b600080fd5b34801561005d57600080fd5b5061008660048036038101908080359060200190929190803590602001909291905050506100dd565b6040518082815260200191505060405180910390f35b3480156100a857600080fd5b506100c760048036038101908080359060200190929190505050610186565b6040518082815260200191505060405180910390f35b6000600a8284011015610106578183016000808486018152602001908152602001600020819055505b600b828401141561011a57600b6001819055505b600c828401141561012e57600c6002819055505b600d828401141561014257600d6003819055505b7f23f54f87f4b5ab78f25d15d4f83e12dc9c218476be07d632a5715acb97dcc7368284016040518082815260200191505060405180910390a1818301905092915050565b600060205280600052604060002060009150905054815600a165627a7a72305820855a1ebd06ede9886ce2548e012ffb0987604d7fb24f41fcd4f7d9f0d4ae873b0029"
+	codeByteDataNew = common.Hex2Bytes(codeNew)
 	//result=11，操作的是类型为unit256的全局变量a1
 	invokeInputCode1 = "e9a58c4000000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000006"
 	inputByteData1   = common.Hex2Bytes(invokeInputCode1)
@@ -132,16 +162,17 @@ var (
 	db      = memdb.New()
 	//db, _ = rocksdb.New("./tmp", nil)
 
-	initcreateContractGas, _ = core.IntrinsicGas(codeByteData, true)            //53000
-	storageContranctDataGas  = uint64(len(codeByteData)) * params.CreateDataGas //187*200=37400
+	initcreateContractGas, _   = core.IntrinsicGas(codeByteData, true)                     //53000
+	storageContranctDataGas    = uint64(len(codeByteData)) * params.CreateDataGas          //187*200=37400
+	storageContranctDataGasNew = uint64(len(codeByteDataNew))*params.CreateDataGas + 10000 //需要91600
 
 	// Ensure that key1 has some funds in the genesis block.
 	gspec = &core.Genesis{
 		Config: &params.ChainConfig{ChainID: new(big.Int).SetInt64(1)},
-		Alloc: core.GenesisAlloc{addr1: {Balance: big.NewInt(10000000000)},
-			addr2: {Balance: big.NewInt(10000000000)},
-			addr3: {Balance: big.NewInt(10000000000)},
-			addr4: {Balance: big.NewInt(10000000000)}},
+		Alloc: core.GenesisAlloc{addr1: {Balance: big.NewInt(100000000000)},
+			addr2: {Balance: big.NewInt(100000000000)},
+			addr3: {Balance: big.NewInt(100000000000)},
+			addr4: {Balance: big.NewInt(100000000000)}},
 	}
 	genesis = gspec.MustCommit(db)
 
@@ -155,15 +186,15 @@ var (
 )
 
 //1.测试顺序执行交易需要的总耗时，分别执行4种情况的数据耗时
-func TestTxsSequenceExecute(t *testing.T) {
+func TestTxsSequenceExecutePerformance(t *testing.T) {
 	//1.测试4种情况数据耗时：
 	// 情况1:3*number条tx，number条tx为普通转账，number条tx为创建合约，number条为tx为合约调用
 	// 情况2:3*number条tx，3*number条tx为普通转账
 	// 情况3:3*number条tx，3*number条tx为创建合约
 	// 情况4:3*number条tx，3*number条tx为合约调用
 	//产生的是1,2,3,4号区块对应上述4种情况
-	var contractAddr common.Address
-	chain, _ := core.GenerateChain(gspec.Config, genesis, pow.NewFaker(), db, 4, func(i int, gen *core.BlockGen) {
+	//var contractAddr common.Address
+	chain, _ := core.GenerateChain(gspec.Config, genesis, pow.NewFaker(), db, 2, func(i int, gen *core.BlockGen) {
 		var createContractTx *types.Transaction
 		switch i {
 		case 0:
@@ -176,47 +207,100 @@ func TestTxsSequenceExecute(t *testing.T) {
 			// number条tx : addr1 create contract
 			for k := 0; k < number; k++ {
 				//注意：如果设置amount大于0，evm执行则会返回reverted错误
-				createContractTx, _ = types.SignTx(types.NewContractCreation(gen.TxNonce(addr1), big.NewInt(0), initcreateContractGas+storageContranctDataGas, new(big.Int).SetInt64(1), codeByteData), signer, key1)
+				createContractTx, _ = types.SignTx(types.NewContractCreation(gen.TxNonce(addr3), big.NewInt(0), initcreateContractGas+storageContranctDataGas, new(big.Int).SetInt64(1), codeByteData), signer, key3)
 				gen.AddTx(createContractTx)
 			}
-			// number条tx : addr1 invoke  contract function
-			msg, _ := createContractTx.AsMessage(types.NewInitialSigner(gspec.Config.ChainID))
-			contractAddr := crypto.CreateAddress(msg.From(), createContractTx.Nonce())
+			// number+1条tx : 1条：add4创建一个新合约  numnber条：addr4 调用新合约的方法
+			//先创建一个另外的新的合约，再开始调用
+			createContractTxNew, _ := types.SignTx(types.NewContractCreation(gen.TxNonce(addr4), big.NewInt(0), initcreateContractGas+storageContranctDataGasNew, new(big.Int).SetInt64(1), codeByteDataNew), signer, key4)
+			gen.AddTx(createContractTxNew)
+			msg, _ := createContractTxNew.AsMessage(types.NewInitialSigner(gspec.Config.ChainID))
+			contractAddrNew := crypto.CreateAddress(msg.From(), createContractTxNew.Nonce())
 			for k := 0; k < number; k++ {
-				invokeContractFuncTx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), contractAddr, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key1)
+				invokeContractFuncTx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr4), contractAddrNew, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key4)
 				gen.AddTx(invokeContractFuncTx)
 			}
 			t2 := time.Now()
-			fmt.Println("test case1(", number, "tx:transfer,", number, "tx:create contract,", number, "tx:invoke contract) spend time:", t2.Sub(t1))
+			fmt.Println("test case1 sequence(", number, "tx:transfer,", number, "tx:create contract,", number, "tx:invoke contract) spend time:", t2.Sub(t1))
 		case 1:
-			// 3*number条tx : addr1 sends addr2 some ether.
+			// number条tx : addr1 sends addr2 some ether.
 			t1 := time.Now()
-			for k := 0; k < 3*number; k++ {
-				tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(50), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
-				gen.AddTx(tx)
+
+			txArray1 := make([]*types.Transaction, number)
+			dag := dag.NewDag()
+			//number = 500
+			for k := 0; k < number; k++ {
+				txArray1[k], _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(50), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
+				gen.AddTx(txArray1[k])
+				dag.AddNode(txArray1[k].Hash().String())
+				if k > 0 {
+					dag.AddEdge(txArray1[k-1].Hash().String(), txArray1[k].Hash().String())
+				}
+			}
+			// // number条tx : addr3 create contract
+			txArray2 := make([]*types.Transaction, number)
+			for k := 0; k < number; k++ {
+				//注意：如果设置amount大于0，evm执行则会返回reverted错误
+				txArray2[k], _ = types.SignTx(types.NewContractCreation(gen.TxNonce(addr3), big.NewInt(0), initcreateContractGas+storageContranctDataGas, new(big.Int).SetInt64(1), codeByteData), signer, key3)
+				gen.AddTx(txArray2[k])
+				dag.AddNode(txArray2[k].Hash().String())
+				if k > 0 {
+					dag.AddEdge(txArray2[k-1].Hash().String(), txArray2[k].Hash().String())
+				}
+			}
+			// // number+1条tx : 1条：add4创建一个新合约  numnber条：addr4 调用新合约的方法
+			// //先创建一个另外的新的合约，再开始调用
+			createContractTxNew, _ := types.SignTx(types.NewContractCreation(gen.TxNonce(addr4), big.NewInt(0), initcreateContractGas+storageContranctDataGasNew, new(big.Int).SetInt64(1), codeByteDataNew), signer, key4)
+			gen.AddTx(createContractTxNew)
+			dag.AddNode(createContractTxNew.Hash().String())
+			msg, _ := createContractTxNew.AsMessage(types.NewInitialSigner(gspec.Config.ChainID))
+			contractAddrNew := crypto.CreateAddress(msg.From(), createContractTxNew.Nonce())
+			txArray3 := make([]*types.Transaction, number)
+			for k := 0; k < number; k++ {
+				txArray3[k], _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr4), contractAddrNew, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key4)
+				gen.AddTx(txArray3[k])
+				dag.AddNode(txArray3[k].Hash().String())
+				if k == 0 {
+					dag.AddEdge(createContractTxNew.Hash().String(), txArray3[k].Hash().String())
+				}
+				if k > 0 {
+					dag.AddEdge(txArray3[k-1].Hash().String(), txArray3[k].Hash().String())
+				}
 			}
 			t2 := time.Now()
-			fmt.Println("test case2(", 3*number, "tx:transfer) spend time:", t2.Sub(t1))
-		case 2:
-			// 3*number条tx : addr1 create contract
-			t1 := time.Now()
-			for k := 0; k < 3*number; k++ {
-				createContractTx, _ = types.SignTx(types.NewContractCreation(gen.TxNonce(addr1), big.NewInt(0), initcreateContractGas+storageContranctDataGas, new(big.Int).SetInt64(1), codeByteData), signer, key1)
-				gen.AddTx(createContractTx)
-			}
-			t2 := time.Now()
-			fmt.Println("test case3(", 3*number, "tx:create contract) spend time:", t2.Sub(t1))
-			msg, _ := createContractTx.AsMessage(types.NewInitialSigner(gspec.Config.ChainID))
-			contractAddr = crypto.CreateAddress(msg.From(), createContractTx.Nonce())
-		case 3:
-			// 3*number条tx : addr1 invoke  contract function
-			t1 := time.Now()
-			for k := 0; k < 3*number; k++ {
-				invokeContractFuncTx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), contractAddr, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key1)
-				gen.AddTx(invokeContractFuncTx)
-			}
-			t2 := time.Now()
-			fmt.Println("test case4(", 3*number, "tx:invoke contract) spend time:", t2.Sub(t1))
+			fmt.Println("test case1 concurrent exexcute(", number, "tx:transfer,", number, "tx:create contract,", number, "tx:invoke contract) spend time:", t2.Sub(t1))
+			//fmt.Println("!!!!!ExecutionDag:" + dag.String() + "\n")
+			gen.AddExecutionDag(*dag)
+			// case 2:
+			// 	// 3*number条tx : addr1 sends addr2 some ether.
+			// 	t1 := time.Now()
+			// 	for k := 0; k < 3*number; k++ {
+			// 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(50), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
+			// 		gen.AddTx(tx)
+			// 	}
+			// 	t2 := time.Now()
+			// 	fmt.Println("test case2(", 3*number, "tx:transfer) spend time:", t2.Sub(t1))
+			// case 3:
+			// 	// 3*number条tx : addr1 create contract
+			// 	t1 := time.Now()
+			// 	for k := 0; k < 3*number; k++ {
+			// 		createContractTx, _ = types.SignTx(types.NewContractCreation(gen.TxNonce(addr1), big.NewInt(0), initcreateContractGas+storageContranctDataGas, new(big.Int).SetInt64(1), codeByteData), signer, key1)
+			// 		gen.AddTx(createContractTx)
+			// 	}
+			// 	t2 := time.Now()
+			// 	fmt.Println("test case3(", 3*number, "tx:create contract) spend time:", t2.Sub(t1))
+			// 	msg, _ := createContractTx.AsMessage(types.NewInitialSigner(gspec.Config.ChainID))
+			// 	contractAddr = crypto.CreateAddress(msg.From(), createContractTx.Nonce())
+			// case 4:
+			// 	// 3*number条tx : addr1 invoke  contract function
+			// 	t1 := time.Now()
+			// 	for k := 0; k < 3*number; k++ {
+			// 		invokeContractFuncTx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), contractAddr, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key1)
+			// 		gen.AddTx(invokeContractFuncTx)
+			// 	}
+			// 	t2 := time.Now()
+			// 	fmt.Println("test case4(", 3*number, "tx:invoke contract) spend time:", t2.Sub(t1))
+			//
 		}
 	})
 
@@ -226,37 +310,56 @@ func TestTxsSequenceExecute(t *testing.T) {
 	// if err != nil {
 	// 	fmt.Println("Error:New state error.", err)
 	// }
+
 	t1 := time.Now()
 	if i, err := blockchain.InsertChain(types.Blocks{chain[0]}); err != nil {
 		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
 		return
 	}
 	t2 := time.Now()
-	fmt.Println("InsertChain block[0] spend time.", t2.Sub(t1))
+	fmt.Println("-----------InsertChain block[0] by sequence Process spend time.", t2.Sub(t1))
 
+	state, _ := blockchain.State()
+	fmt.Printf("current block num : %#v \n ", blockchain.CurrentBlock().Header().Number)
+	fmt.Printf("add1 balance  : %#v \n ", state.GetBalance(addr1))
+	fmt.Printf("add2 balance  : %#v \n ", state.GetBalance(addr2))
+	fmt.Printf("add3 balance  : %#v \n ", state.GetBalance(addr3))
+	fmt.Printf("add4 balance  : %#v \n ", state.GetBalance(addr4))
+
+	/*****************************/
+	parallelBlockchain, _ := core.NewBlockChain(gspec.Config, vmConfig, db, pow.NewFaker())
+	parallelProcessor := core.NewStateParallelProcessor(gspec.Config, blockchain)
+	parallelBlockchain.SetProcessor(parallelProcessor)
 	t1 = time.Now()
-	if i, err := blockchain.InsertChain(types.Blocks{chain[1]}); err != nil {
+	if i, err := parallelBlockchain.InsertChain(types.Blocks{chain[1]}); err != nil {
 		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
 		return
 	}
 	t2 = time.Now()
-	fmt.Println("InsertChain block[1]  spend time.", t2.Sub(t1))
+	fmt.Println("-----------InsertChain block[1] by concurrent Process spend time.", t2.Sub(t1))
 
-	t1 = time.Now()
-	if i, err := blockchain.InsertChain(types.Blocks{chain[2]}); err != nil {
-		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
-		return
-	}
-	t2 = time.Now()
-	fmt.Println("InsertChain block[2]  spend time.", t2.Sub(t1))
+	state, _ = parallelBlockchain.State()
+	fmt.Printf("current block num : %#v \n ", parallelBlockchain.CurrentBlock().Header().Number)
+	fmt.Printf("add1 balance  : %#v \n ", state.GetBalance(addr1))
+	fmt.Printf("add2 balance  : %#v \n ", state.GetBalance(addr2))
+	fmt.Printf("add3 balance  : %#v \n ", state.GetBalance(addr3))
+	fmt.Printf("add4 balance  : %#v \n ", state.GetBalance(addr4))
 
-	t1 = time.Now()
-	if i, err := blockchain.InsertChain(types.Blocks{chain[3]}); err != nil {
-		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
-		return
-	}
-	t2 = time.Now()
-	fmt.Println("InsertChain block[3]  spend time.", t2.Sub(t1))
+	// t1 = time.Now()
+	// if i, err := blockchain.InsertChain(types.Blocks{chain[2]}); err != nil {
+	// 	fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
+	// 	return
+	// }
+	// t2 = time.Now()
+	// fmt.Println("InsertChain block[2]  spend time.", t2.Sub(t1))
+
+	// t1 = time.Now()
+	// if i, err := blockchain.InsertChain(types.Blocks{chain[3]}); err != nil {
+	// 	fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
+	// 	return
+	// }
+	// t2 = time.Now()
+	// fmt.Println("InsertChain block[3]  spend time.", t2.Sub(t1))
 	// //测试情况1耗时
 	// t1 := time.Now()
 	// receipts, logs, usedGas, err := processor.Process(chain[0], state, vmConfig)
@@ -301,6 +404,67 @@ func TestTxsSequenceExecute(t *testing.T) {
 
 }
 
+func TestTxsConcurrentExecuteWithConflict(t *testing.T) {
+	chain, _ := core.GenerateChain(gspec.Config, genesis, pow.NewFaker(), db, 2, func(i int, gen *core.BlockGen) {
+		//var createContractTx *types.Transaction
+		switch i {
+		case 0:
+			tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(100), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
+			gen.AddTx(tx1)
+			tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(200), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
+			gen.AddTx(tx2)
+			dag := dag.NewDag()
+			dag.AddNode(tx1.Hash().String())
+			dag.AddNode(tx2.Hash().String())
+			//dag.AddEdge(tx1.Hash().String(), tx2.Hash().String())
+			fmt.Println("!!!!!ExecutionDag:" + dag.String() + "\n")
+			gen.AddExecutionDag(*dag)
+		}
+	})
+
+	parallelBlockchain, _ := core.NewBlockChain(gspec.Config, vmConfig, db, pow.NewFaker())
+	parallelProcessor := core.NewStateParallelProcessor(gspec.Config, blockchain)
+	parallelBlockchain.SetProcessor(parallelProcessor)
+
+	fmt.Println("chain length:", len(chain))
+	fmt.Println("********************test parallelProcessor.Process function Time consuming *******")
+	// state, err := state.New(chain[0].StateRoot(), state.NewDatabase(db))
+	// if err != nil {
+	// 	fmt.Println("Error:New state error.", err)
+	// }
+	t1 := time.Now()
+	fmt.Printf("11** current block num : %#v，hash %v \n ", parallelBlockchain.CurrentBlock().Header().Number,
+		parallelBlockchain.CurrentBlock().Hash().String())
+	fmt.Printf("11** chain[0].hash %v \n ", chain[0].Hash().String())
+	fmt.Printf("11** chain[1].parentHash %v \n ", chain[1].Header().ParentHash.String())
+	if i, err := parallelBlockchain.InsertChain(types.Blocks{chain[0]}); err != nil {
+		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
+		return
+	}
+	fmt.Printf("22** current block num : %#v，hash %v \n ", parallelBlockchain.CurrentBlock().Header().Number,
+		parallelBlockchain.CurrentBlock().Hash().String())
+
+	parent := parallelBlockchain.GetHeader(chain[1].Header().ParentHash, 1)
+	if parent != nil {
+		fmt.Printf("*****parent: %v \n", parent.Hash().String())
+	}
+	// if i, err := parallelBlockchain.InsertChain(types.Blocks{chain[1]}); err != nil {
+	// 	fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
+	// 	return
+	// }
+	t2 := time.Now()
+	fmt.Println("InsertChain   spend time.", t2.Sub(t1))
+
+	fmt.Println("Print relate infomation==>")
+	fmt.Printf("block[1].dag : %#v \n ", chain[0].Header().ExecutionDag)
+	state, _ := parallelBlockchain.State()
+	fmt.Printf("current block num : %#v \n ", parallelBlockchain.CurrentBlock().Header().Number)
+	fmt.Printf("add1 balance  : %#v \n ", state.GetBalance(addr1))
+	fmt.Printf("add2 balance  : %#v \n ", state.GetBalance(addr2))
+	fmt.Printf("add3 balance  : %#v \n ", state.GetBalance(addr3))
+	fmt.Printf("add4 balance  : %#v \n ", state.GetBalance(addr4))
+}
+
 //2.测试并发执行交易需要的总耗时，
 func TestTxsConcurrentExecute(t *testing.T) {
 	//构造两个区块进行执行：
@@ -308,27 +472,38 @@ func TestTxsConcurrentExecute(t *testing.T) {
 	//区块2包含了4个tx，分别是add1给add2转账50token，add1调用合约A，add3调用合约A,add4调用合约A,传入的参数都不同，最终影响的map的值也是不同的，看是否能并发执行
 	var contractAddr common.Address
 	chain, _ := core.GenerateChain(gspec.Config, genesis, pow.NewFaker(), db, 2, func(i int, gen *core.BlockGen) {
-		var createContractTx *types.Transaction
+		//var createContractTx *types.Transaction
 		switch i {
 		case 0:
+			//add1转账add2 100token
 			tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(100), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
 			gen.AddTx(tx1)
+			//add3转账add4 50token
 			tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr3), addr4, big.NewInt(50), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key3)
 			gen.AddTx(tx2)
+			//addr1创建合约
+			//tx3, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(150), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
 			tx3, _ := types.SignTx(types.NewContractCreation(gen.TxNonce(addr1), big.NewInt(0), initcreateContractGas+storageContranctDataGas, new(big.Int).SetInt64(1), codeByteData), signer, key1)
 			gen.AddTx(tx3)
-			createContractTx = tx2
-			msg, _ := createContractTx.AsMessageWithoutCheckNonce(types.NewInitialSigner(gspec.Config.ChainID))
-			contractAddr = crypto.CreateAddress(msg.From(), createContractTx.Nonce())
+			msg, _ := tx3.AsMessageWithoutCheckNonce(types.NewInitialSigner(gspec.Config.ChainID))
+			contractAddr = crypto.CreateAddress(msg.From(), tx3.Nonce())
+			//add1调用合约
+			//tx4, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(200), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
+			tx4, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), contractAddr, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key1)
+			gen.AddTx(tx4)
 			//构造区块的由tx执行关系组成的dag，dag图为
-			//   tx1  =>  tx3
+			//   tx1  =>  tx3=》tx4
 			//   tx2
 			dag := dag.NewDag()
 			dag.AddNode(tx1.Hash().String())
 			dag.AddNode(tx2.Hash().String())
 			dag.AddNode(tx3.Hash().String())
+			dag.AddNode(tx4.Hash().String())
+			//如果不加依赖全部并发执行会报冲突错误
 			dag.AddEdge(tx1.Hash().String(), tx3.Hash().String())
-			gen.AddExecutionDag(dag)
+			//dag.AddEdge(tx2.Hash().String(), tx3.Hash().String())
+			dag.AddEdge(tx3.Hash().String(), tx4.Hash().String())
+			gen.AddExecutionDag(*dag)
 		case 1:
 			tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(100), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
 			gen.AddTx(tx1)
@@ -348,7 +523,7 @@ func TestTxsConcurrentExecute(t *testing.T) {
 			dag.AddNode(tx3.Hash().String())
 			dag.AddNode(tx4.Hash().String())
 			dag.AddEdge(tx1.Hash().String(), tx2.Hash().String())
-			gen.AddExecutionDag(dag)
+			gen.AddExecutionDag(*dag)
 
 		}
 	})
@@ -363,21 +538,34 @@ func TestTxsConcurrentExecute(t *testing.T) {
 	// if err != nil {
 	// 	fmt.Println("Error:New state error.", err)
 	// }
+
+	// fmt.Printf("11** current block num : %#v，hash %v \n ", parallelBlockchain.CurrentBlock().Header().Number,
+	// 	parallelBlockchain.CurrentBlock().Hash().String())
+	// fmt.Printf("11** chain[0].hash %v \n ", chain[0].Hash().String())
+	// fmt.Printf("11** chain[1].parentHash %v \n ", chain[1].Header().ParentHash.String())
 	t1 := time.Now()
 	if i, err := parallelBlockchain.InsertChain(types.Blocks{chain[0]}); err != nil {
 		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
 		return
 	}
+	t2 := time.Now()
+	fmt.Println("InsertChain   spend time.", t2.Sub(t1))
+	// fmt.Printf("22** current block num : %#v，hash %v \n ", parallelBlockchain.CurrentBlock().Header().Number,
+	// 	parallelBlockchain.CurrentBlock().Hash().String())
+
+	parent := parallelBlockchain.GetHeader(chain[1].Header().ParentHash, 1)
+	if parent != nil {
+		fmt.Printf("*****parent: %v \n", parent.Hash().String())
+	}
 	// if i, err := parallelBlockchain.InsertChain(types.Blocks{chain[1]}); err != nil {
 	// 	fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
 	// 	return
 	// }
-	t2 := time.Now()
-	fmt.Println("InsertChain   spend time.", t2.Sub(t1))
 
 	fmt.Println("Print relate infomation==>")
-	fmt.Printf("block[1].dag : %#v \n ", chain[0].ExecutionDag)
+	fmt.Printf("block[1].dag : %#v \n ", chain[0].Header().ExecutionDag)
 	state, _ := parallelBlockchain.State()
+	fmt.Printf("current block num : %#v \n ", parallelBlockchain.CurrentBlock().Header().Number)
 	fmt.Printf("add1 balance  : %#v \n ", state.GetBalance(addr1))
 	fmt.Printf("add2 balance  : %#v \n ", state.GetBalance(addr2))
 	fmt.Printf("add3 balance  : %#v \n ", state.GetBalance(addr3))
@@ -405,5 +593,7 @@ func main() {
 	// fmt.Println("a:", a, ";b:", b)
 	var t *testing.T
 	//TestTxsSequenceExecute(t)
-	TestTxsConcurrentExecute(t)
+	//TestTxsConcurrentExecute(t)
+	//TestTxsConcurrentExecuteWithConflict(t)
+	TestTxsSequenceExecutePerformance(t)
 }

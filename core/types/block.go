@@ -50,6 +50,8 @@ type Header struct {
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"          gencodec:"required"`
 	Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
+	//dag:Transaction execution diagram
+	ExecutionDag dag.Dag `json:"ExecutionDag"            gencodec:"required"`
 }
 
 // Hash returns the block hash of the header
@@ -110,9 +112,6 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
-
-	//dag:Transaction execution diagram
-	ExecutionDag *dag.Dag
 }
 
 type StorageBlock Block
@@ -151,7 +150,7 @@ func NewBlock(header *Header, txs []*Transaction, receipts []*Receipt) *Block {
 }
 
 //NewBlockWithDag add  for parallel execute
-func NewBlockWithDag(header *Header, txs []*Transaction, receipts []*Receipt, executionDag *dag.Dag) *Block {
+func NewBlockWithDag(header *Header, txs []*Transaction, receipts []*Receipt, executionDag dag.Dag) *Block {
 	b := &Block{Head: CopyHeader(header), Td: new(big.Int)}
 	if len(txs) == 0 {
 		b.Head.TxRoot = EmptyRootHash
@@ -168,7 +167,7 @@ func NewBlockWithDag(header *Header, txs []*Transaction, receipts []*Receipt, ex
 		b.Head.Bloom = CreateBloom(receipts)
 	}
 
-	b.ExecutionDag = executionDag
+	b.Head.ExecutionDag = executionDag
 	return b
 }
 

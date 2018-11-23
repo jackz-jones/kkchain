@@ -28,7 +28,7 @@ type BlockGen struct {
 	header      *types.Header
 	statedb     *state.StateDB
 
-	executionDag *dag.Dag
+	executionDag dag.Dag
 
 	gasPool  *GasPool
 	txs      []*types.Transaction
@@ -169,7 +169,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 		if b.engine != nil {
 			var block *types.Block
-			if b.executionDag == nil {
+			if b.executionDag.Len() == 0 {
 				block = types.NewBlock(b.header, b.txs, b.receipts)
 			} else {
 				block = types.NewBlockWithDag(b.header, b.txs, b.receipts, b.executionDag)
@@ -224,9 +224,10 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 			Difficulty: parent.Difficulty(),
 			//UncleHash:  parent.UncleHash(),
 		}),
-		GasLimit: CalcGasLimit(parent),
-		Number:   new(big.Int).Add(parent.Number(), common.Big1),
-		Time:     time,
+		GasLimit: 1000000000,
+		//GasLimit: CalcGasLimit(parent),
+		Number: new(big.Int).Add(parent.Number(), common.Big1),
+		Time:   time,
 	}
 }
 
@@ -282,6 +283,6 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 }
 
 //AddExecutionDag adds Transaction execution diagram
-func (b *BlockGen) AddExecutionDag(executionDag *dag.Dag) {
+func (b *BlockGen) AddExecutionDag(executionDag dag.Dag) {
 	b.executionDag = executionDag
 }

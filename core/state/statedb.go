@@ -1,6 +1,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -473,7 +474,40 @@ func (self *StateDB) Copy() *StateDB {
 	return state
 }
 
-// Snapshot returns an identifier for the current revision of the state.
+// Copy creates a deep, independent copy of the state.
+// Snapshots of the copied state cannot be applied to the copy.
+func (self *StateDB) CopyWithStateObjects() *StateDB {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
+	// Copy all the basic fields, initialize the memory ones
+	state := &StateDB{
+		db:                self.db,
+		trie:              self.db.CopyTrie(self.trie),
+		stateObjects:      make(map[common.Address]*stateObject, len(self.journal.dirties)),
+		stateObjectsDirty: make(map[common.Address]struct{}, len(self.journal.dirties)),
+		refund:            self.refund,
+		logs:              make(map[common.Hash][]*types.Log, len(self.logs)),
+		logSize:           self.logSize,
+		preimages:         make(map[common.Hash][]byte),
+		journal:           newJournal(),
+	}
+
+	for addr, stateObject := range self.stateObjects {
+		state.stateObjects[addr] = stateObject.deepCopy(state)
+	}
+
+	for hash, logs := range self.logs {
+		state.logs[hash] = make([]*types.Log, len(logs))
+		copy(state.logs[hash], logs)
+	}
+	for hash, preimage := range self.preimages {
+		state.preimages[hash] = preimage
+	}
+	return state
+}
+
+// Snapshot returns an identstateObjectsvision of the state.
 func (self *StateDB) Snapshot() int {
 	id := self.nextRevisionId
 	self.nextRevisionId++
@@ -601,27 +635,86 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 }
 
 // Merge inputStatedb into s.stateObjects,and then invoke commit function to update trie
-func (s *StateDB) MergeStateObjects(inputObjects map[common.Address]*stateObject) (err error) {
-	for addr, stateObject := range inputObjects {
+func (s *StateDB) MergeStateDB(inputStateDB *StateDB) (err error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	//fmt.Printf("***********1111111***************inputStateDb version :%d,orginStateDB version: %d\n", inputStateDB.nextRevisionId, s.nextRevisionId)
+	// fmt.Printf("AAAAAA@@@@MergeStateDB inputStateDB %#v \n", inputStateDB)
+	// fmt.Printf("AAAAAA@@@@MergeStateDB inputStateDB.GetStateObjects() %#v \n", inputStateDB.GetStateObjects())
+	// fmt.Printf("AAAAAA@@@@MergeStateDB inputStateDB.stateObjectsDirty %#v \n", inputStateDB.stateObjectsDirty)
+	// fmt.Printf("AAAAAA@@@@MergeStateDB inputStateDB..journal.dirties %#v \n", inputStateDB.journal.dirties)
+	// for addr := range inputStateDB.stateObjectsDirty {
+	// 	fmt.Printf("BBBBB@@@@MergeStateDB stateObjectsDirty addr %#v \n", addr.String())
+	// }
+	//s.stateObjects = inputStateDB.stateObjects
+
+	//1.有检查stateObject的版本，不需要再检查全局版本检查是否冲突,这里仅仅作一种记录作用
+	//fmt.Printf("inputStateDB version: %d,StateDB version:%d\n", inputStateDB.nextRevisionId, s.nextRevisionId)
+	// if inputStateDB.nextRevisionId < s.nextRevisionId {
+	// 	return conflictKeyError
+	// }
+
+	// for addr, stateObject := range s.stateObjects {
+	// 	fmt.Printf("!!!!----遍历s.stateObjects  addr %#v,version %d \n", addr.String(), stateObject.GetVersion())
+	// }
+
+	for addr := range inputStateDB.stateObjectsDirty {
+		//fmt.Printf("AAAAAA@@@@MergeStateDB addr %#v ,stateObject %#v\n", addr.String(), stateObject)
+		//fmt.Printf("遍历----inputStateDB stateObjectsDirty addr: %#v \n", addr.String())
 		if s.stateObjects[addr] != nil {
-			for key := range stateObject.cachedStorage {
-				if _, ok := s.stateObjects[addr].cachedStorage[key]; !ok {
-					return conflictKeyError
-				}
+			// for key := range stateObject.cachedStorage {
+			// 	if _, ok := s.stateObjects[addr].cachedStorage[key]; !ok {
+
+			// 	}
+			// }
+			// for key, value := range stateObject.cachedStorage {
+			// 	s.stateObjects[addr].setState(key, value)
+			// }
+			//如果不使用版本号，无法区分什么时候是冲突，什么时候是正常更新，
+
+			//检查每个stateObject的版本是否有冲突
+			//checkConflictflag := true
+			//fmt.Printf("***********冲突的地址：******addr:%v,inputStateDbstateObject.version :%d,orginStateDB.stateObject.version: %d\n",
+			//	addr.String(), inputStateDB.stateObjects[addr].GetVersion(), s.stateObjects[addr].GetVersion())
+			if s.stateObjects[addr].GetVersion() > inputStateDB.stateObjects[addr].GetVersion() && !bytes.Equal(addr.Bytes(), (common.Address{}).Bytes()) {
+				return conflictKeyError
 			}
-			for key, value := range stateObject.cachedStorage {
-				s.stateObjects[addr].setState(key, value)
-			}
-			s.stateObjects[addr].CommitTrie(s.db)
-		} else {
-			s.setStateObject(stateObject)
 		}
+
+		s.setStateObject(inputStateDB.stateObjects[addr])
+		s.stateObjects[addr].SetVersion(s.stateObjects[addr].GetVersion() + 1)
+		//s.stateObjects[addr].SetVersion(s.stateObjects[addr].GetVersion() + 1)
+		//s.stateObjects[stateObject.Address()].CommitTrie(s.db)
+		//fmt.Printf("After setStateObject ,addr:%v,version:%d\n", addr.String(), s.stateObjects[addr].GetVersion())
 	}
-	s.Commit(false)
+	s.journal = inputStateDB.journal
+	s.stateObjectsDirty = inputStateDB.stateObjectsDirty
+	s.Commit(true)
+	s.Snapshot()
+	//fmt.Printf("***********333333***************inputStateDb version :%d,orginStateDB version: %d\n", inputStateDB.nextRevisionId, s.nextRevisionId)
 	return nil
 }
 
 //GetStateObjects return all stateObject of statedb
-func (s *StateDB) GetStateObjects() (stateObjects map[common.Address]*stateObject) {
+func (s *StateDB) GetStateObjects() map[common.Address]*stateObject {
 	return s.stateObjects
+}
+
+//GetStateObjects return all stateObject of statedb
+func (s *StateDB) GetStateObjectsDirty() map[common.Address]struct{} {
+	return s.stateObjectsDirty
+}
+
+func (s *StateDB) GetJournal() *journal {
+	return s.journal
+}
+
+//GetSnapshotVersion GetSnapshotVersion of statedb
+func (s *StateDB) GetSnapshotVersion() int {
+	return s.nextRevisionId
+}
+
+//SetSnapshotVersion SetSnapshotVersion of statedb
+func (s *StateDB) SetSnapshotVersion(version int) {
+	s.nextRevisionId = version
 }

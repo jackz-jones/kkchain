@@ -2,6 +2,7 @@ package dag
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -21,8 +22,9 @@ type Task struct {
 
 // Errors
 var (
-	ErrDagHasCirclular = errors.New("dag hava circlular")
-	ErrTimeout         = errors.New("dispatcher execute timeout")
+	ErrDagHasCirclular   = errors.New("dag hava circlular")
+	ErrTimeout           = errors.New("dispatcher execute timeout")
+	MaxConcurrentRoutine = 5000
 )
 
 // Dispatcher struct a message dispatcher dag.
@@ -85,6 +87,15 @@ func (dp *Dispatcher) Run() error {
 	if rootCounter == 0 && len(vertices) > 0 {
 		return ErrDagHasCirclular
 	}
+
+	//fix bug:setup different concurrent coroutine will generate different results
+	if dp.concurrency == 0 {
+		dp.concurrency = rootCounter
+		if dp.concurrency > MaxConcurrentRoutine {
+			dp.concurrency = MaxConcurrentRoutine
+		}
+	}
+	fmt.Printf("设置并发执行交易的协程数量为:%d\n", dp.concurrency)
 
 	return dp.execute()
 }

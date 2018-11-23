@@ -63,6 +63,10 @@ func (j *journal) dirty(addr common.Address) {
 	j.dirties[addr]++
 }
 
+func (j *journal) GetDirtys() map[common.Address]int {
+	return j.dirties
+}
+
 // length returns the current number of entries in the journal.
 func (j *journal) length() int {
 	return len(j.entries)

@@ -323,6 +323,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	defer bc.mu.Unlock()
 
 	currentBlock := bc.CurrentBlock()
+
 	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
 
@@ -373,8 +374,38 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		return err
 	}
 
+	// blockHeader := bc.GetHeader(block.Hash(), 1)
+	// //if blockHeader != nil {
+	// fmt.Printf("QQQQQ*****WriteBlockWithState GetHeader: %v \n", blockHeader.Hash().String())
+	// //}
+	// blockheader := bc.CurrentHeader()
+	// //if blockHeader != nil {
+	// fmt.Printf("QQQQQ*****WriteBlockWithState CurrentHeader: %v \n", blockheader.Hash().String())
+	// blockinsert := bc.CurrentBlock()
+	// //if blockHeader != nil {
+	// fmt.Printf("QQQQQ*****WriteBlockWithState CurrentBlock: %v \n", blockinsert.Hash().String())
+	// //bb, _ = bc.State()
+	// // fmt.Printf("33333*****WriteBlockWithState add1 balance  : %#v \n ", bb.GetBalance(addr1))
+	// //fmt.Printf("3333*****WriteBlockWithState bc.CurrentBlock().StateRoot() : %#v \n ", bc.CurrentBlock().StateRoot().String())
+	// fmt.Printf("3333*****WriteBlockWithState block.hash: %v \n", block.Hash().String())
+	// fmt.Printf("3333*****WriteBlockWithState block.Header.hash: %v \n", block.Header().Hash().String())
 	// Set new head.
 	bc.insert(block)
+	// fmt.Printf("4444*****WriteBlockWithState block.Header.hash: %v \n", block.Header().Hash().String())
+	// fmt.Printf("4444*****WriteBlockWithState block.hash: %v \n", block.Hash().String())
+	// //fmt.Printf("4444*****WriteBlockWithState bc.CurrentBlock().StateRoot() : %#v \n ", bc.CurrentBlock().StateRoot().String())
+	// // bb, _ = bc.State()
+	// // fmt.Printf("5555*****WriteBlockWithState add1 balance  : %#v \n ", bb.GetBalance(addr1))
+	// blockHeader = bc.GetHeader(block.Hash(), 1)
+	// //if blockHeader != nil {
+	// fmt.Printf("MMMMMMM*****WriteBlockWithState GetHeader: %v \n", blockHeader.Hash().String())
+	// //}
+	// blockheader = bc.CurrentHeader()
+	// //if blockHeader != nil {
+	// fmt.Printf("MMMMMMM*****WriteBlockWithState CurrentHeader: %v \n", blockheader.Hash().String())
+	// blockinsert = bc.CurrentBlock()
+	// //if blockHeader != nil {
+	// fmt.Printf("MMMMMMM*****WriteBlockWithState CurrentBlock: %v \n", blockinsert.Hash().String())
 	return nil
 }
 
@@ -752,7 +783,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 	if len(chain) == 0 {
 		return 0, nil, nil, nil
 	}
-
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
 		if chain[i].NumberU64() != chain[i-1].NumberU64()+1 || chain[i].ParentHash() != chain[i-1].Hash() {
@@ -807,9 +837,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 
 		//TODO: optimization parallel verify header???
 		err := bc.engine.VerifyHeader(bc, block.Header())
+		//fmt.Printf("VerifyHeader, err: %v \n", err)
 		if err == nil {
 			err = bc.Validator().ValidateBody(block)
 		}
+		//fmt.Printf("ValidateBody, err: %v \n", err)
 
 		switch {
 		case err == ErrKnownBlock:
@@ -873,12 +905,30 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			return i, events, coalescedLogs, err
 		}
 
+		// fmt.Printf("1111*****WriteBlockWithState block.hash: %v \n", block.Hash().String())
+		// fmt.Printf("1111*****WriteBlockWithState block.Header.hash: %v \n", block.Header().Hash().String())
 		// Process block using the parent state as reference point.
 		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}
+		// var (
+		// 	key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		// 	key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		// 	key3, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7b")
+		// 	key4, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7c")
+		// 	addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		// 	addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		// 	addr3   = crypto.PubkeyToAddress(key3.PublicKey)
+		// 	addr4   = crypto.PubkeyToAddress(key4.PublicKey)
+		// )
+		// fmt.Printf("&&&&#######processor.Process add1 balance  : %#v \n ", state.GetBalance(addr1))
+		// fmt.Printf("&&&&#######processor.Process add2 balance  : %#v \n ", state.GetBalance(addr2))
+		// fmt.Printf("&&&&#######processor.Process add3 balance  : %#v \n ", state.GetBalance(addr3))
+		// fmt.Printf("&&&&####### processor.Process add4 balance  : %#v \n ", state.GetBalance(addr4))
 
+		// fmt.Printf("2222*****WriteBlockWithState block.hash: %v \n", block.Hash().String())
+		// fmt.Printf("2222*****WriteBlockWithState block.Header.hash: %v \n", block.Header().Hash().String())
 		//Validate the state using the default validator
 		err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
 		if err != nil {
@@ -891,6 +941,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			return i, events, coalescedLogs, err
 		}
 
+		// fmt.Printf("&&&&^^^^^#######processor.Process add1 balance  : %#v \n ", state.GetBalance(addr1))
+		// fmt.Printf("&&&&^^^^^#######processor.Process add2 balance  : %#v \n ", state.GetBalance(addr2))
+		// fmt.Printf("&&&&^^^^^#######processor.Process add3 balance  : %#v \n ", state.GetBalance(addr3))
+		// fmt.Printf("&&&&^^^^^####### processor.Process add4 balance  : %#v \n ", state.GetBalance(addr4))
 		coalescedLogs = append(coalescedLogs, logs...)
 		events = append(events, ChainEvent{block, block.Hash(), logs})
 		lastCanon = block

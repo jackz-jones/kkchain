@@ -62,6 +62,8 @@ type stateObject struct {
 	dirtyCode bool // true if the code was updated
 	suicided  bool
 	deleted   bool
+	//add mvcc for concurrent execute
+	version int
 }
 
 // empty returns whether the account is considered empty.
@@ -259,6 +261,7 @@ func (self *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.suicided = self.suicided
 	stateObject.dirtyCode = self.dirtyCode
 	stateObject.deleted = self.deleted
+	stateObject.version = self.version
 	return stateObject
 }
 
@@ -332,4 +335,12 @@ func (self *stateObject) Nonce() uint64 {
 // interface. Interfaces are awesome.
 func (self *stateObject) Value() *big.Int {
 	panic("Value on stateObject should never be called")
+}
+
+func (self *stateObject) GetVersion() int {
+	return self.version
+}
+
+func (self *stateObject) SetVersion(version int) {
+	self.version = version
 }

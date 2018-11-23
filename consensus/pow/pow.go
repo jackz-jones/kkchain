@@ -96,7 +96,9 @@ func (ethash *Ethash) VerifyHeader(chain consensus.ChainReader, header *types.He
 	if chain.GetHeader(header.Hash(), number) != nil {
 		return nil
 	}
+	//fmt.Printf("*****VerifyHeader header.ParentHash: %v ,num: %d \n", header.ParentHash.String(), number-1)
 	parent := chain.GetHeader(header.ParentHash, number-1)
+	//fmt.Printf("*****VerifyHeader header.Hash: %v \n", parent.Hash().String())
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
