@@ -280,14 +280,14 @@ func (w *worker) commitTask() {
 
 	//get txs from pending pool
 	pending, count, _ := w.txpool.Pending()
-	txs := make(types.Transactions, 0, count)
-	for _, acctxs := range pending {
-		for _, tx := range acctxs {
-			txs = append(txs, tx)
-		}
-	}
+	//txs := make(types.Transactions, 0, count)
+	//for _, acctxs := range pending {
+	//	for _, tx := range acctxs {
+	//		txs = append(txs, tx)
+	//	}
+	//}
 
-	if len(txs) > 0 {
+	if count > 0 {
 		//apply txs and get block
 		//if w.commitTransactions(txs, w.miner) == false {
 		//	return
@@ -297,7 +297,7 @@ func (w *worker) commitTask() {
 			return
 		}
 
-		w.currentCtx.txs, w.currentCtx.receipts, err = w.chain.Processor().ApplyTransactions(txs, w.currentCtx.header, w.currentCtx.state)
+		w.currentCtx.txs, w.currentCtx.receipts, err = w.chain.Processor().ApplyTransactions(pending, count, w.currentCtx.header, w.currentCtx.state)
 		if err != nil {
 			return
 		}

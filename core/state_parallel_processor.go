@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/invin/kkchain/common"
 	"github.com/invin/kkchain/core/dag"
@@ -10,9 +11,6 @@ import (
 	"github.com/invin/kkchain/core/types"
 	"github.com/invin/kkchain/core/vm"
 	"github.com/invin/kkchain/params"
-
-	"sync"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -207,100 +205,86 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 	return receipts, allLogs, *usedGas, nil
 }
 
-func (p *StateParallelProcessor) ApplyTransactions(txs types.Transactions, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
+func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
 
 	var executedTx types.Transactions
 	var receipts types.Receipts
 
+	parallel := ParallelNum
+	if ParallelNum > len(txMaps) {
+		parallel = len(txMaps)
+	}
+
+	parallelCh := make(chan bool, parallel)
 	gasPool := new(GasPool).AddGas(header.GasLimit)
-
-	resultCh := make(chan *ApplyResult, len(txs))
-
-	//TODO：limit parallel number if needed
+	lock := &sync.RWMutex{}
 	var pend sync.WaitGroup
-	for _, tx := range txs {
+
+	for _, txs := range txMaps {
+		parallelCh <- true
+
+		lock.Lock()
+		gp := new(GasPool).AddGas(gasPool.Gas())
+		lock.Unlock()
+
 		pend.Add(1)
+		go func(accTxs types.Transactions) {
+			defer func() {
+				<-parallelCh
+			}()
 
-		go func() {
 			defer pend.Done()
-			p.applyTx(gasPool, statedb, header, tx, resultCh)
-		}()
+
+			txState := statedb.Copy()
+			usedGas := new(uint64)
+
+			// Iterate over and process the individual transactions
+			for i, tx := range accTxs {
+
+				log.WithFields(log.Fields{"gasPool": gasPool, "tx": tx.Hash().String()}).Info("new tx prepare to execute")
+				// If we don't have enough gas for any further transactions then we're done
+				if gasPool.Gas() < params.TxGas {
+					log.WithFields(log.Fields{"have": gasPool, "want": params.TxGas}).Debug("Not enough gas for further transactions")
+					break
+				}
+
+				// Start executing the transaction
+				txState.Prepare(tx.Hash(), common.Hash{}, i)
+				snap := txState.Snapshot()
+				receipt, gas, err := ApplyTransaction(p.config, p.bc, &header.Miner, gp, txState, header, tx, usedGas, vm.Config{})
+				if err != nil {
+					log.WithFields(log.Fields{"tx": tx.Hash().String(), "err": err}).Info("execute failed")
+					txState.RevertToSnapshot(snap)
+					break
+				}
+				log.WithFields(log.Fields{"tx": tx.Hash().String()}).Info("execute success")
+
+				//TODO: merge to stateDb, bypass collect conflicts and dependencies
+
+				lock.Lock()
+				//TODO: if conflict, the remain txs save to pending txmap
+
+				//if don't conflict, execute successful, then append to returns
+				executedTx = append(executedTx, tx)
+				receipts = append(receipts, receipt)
+				header.GasUsed += gas
+				gasPool.SubGas(gas)
+
+				//TODO：add dag
+
+				lock.Unlock()
+
+			}
+
+		}(txs)
 	}
+
 	pend.Wait()
-	close(resultCh)
 
-	for result := range resultCh {
-		if result.tx != nil {
-			executedTx = append(executedTx, result.tx)
-			receipts = append(receipts, result.receipt)
-			header.GasUsed += result.gas
-		}
-	}
+	close(parallelCh)
 
+	//TODO：serially execute txs in pending txmap
+
+	log.WithFields(log.Fields{"executed_tx_count": executedTx.Len()}).Info("ApplyTransactions over")
 	return executedTx, receipts, nil
-}
-
-type ApplyResult struct {
-	tx      *types.Transaction
-	receipt *types.Receipt
-	gas     uint64
-	err     error
-}
-
-func (p *StateParallelProcessor) applyTx(gp *GasPool, stateDb *state.StateDB, header *types.Header, tx *types.Transaction, resultCh chan *ApplyResult) {
-
-	result := make(chan *ApplyResult)
-	go func() {
-		txState := stateDb.Copy()
-		usedGas := new(uint64)
-
-		// If we don't have enough gas for any further transactions then we're done
-		if gp.Gas() < params.TxGas {
-			log.WithFields(log.Fields{"have": gp, "want": params.TxGas}).Debug("Not enough gas for further transactions")
-			result <- &ApplyResult{
-				gas: 0,
-				err: ErrAvailGasTooLow,
-			}
-			return
-		}
-
-		// Start executing the transaction
-		txState.Prepare(tx.Hash(), common.Hash{}, 0)
-
-		snap := txState.Snapshot()
-		receipt, gas, err := ApplyTransaction(p.config, p.bc, &header.Miner, gp, txState, header, tx, usedGas, vm.Config{})
-		if err != nil {
-			txState.RevertToSnapshot(snap)
-			result <- &ApplyResult{
-				gas: 0,
-				err: err,
-			}
-			return
-		}
-
-		result <- &ApplyResult{
-			tx:      tx,
-			receipt: receipt,
-			gas:     gas,
-		}
-	}()
-
-	select {
-	case <-time.After(10 * time.Second):
-		log.Error(ErrExecuteTimeout)
-		resultCh <- &ApplyResult{}
-		return
-	case res := <-result:
-		if res.err != nil {
-			log.Error(res.err)
-			resultCh <- &ApplyResult{}
-			return
-		}
-
-		//TODO: merge to stateDb, bypass collect conflicts and dependencies
-
-		//if don't conflict, set to channel
-		resultCh <- res
-	}
-
 }
