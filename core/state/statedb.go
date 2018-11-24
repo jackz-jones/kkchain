@@ -497,6 +497,10 @@ func (self *StateDB) CopyWithStateObjects() *StateDB {
 		state.stateObjects[addr] = stateObject.deepCopy(state)
 	}
 
+	// for addr := range self.stateObjectsDirty {
+	// 	state.stateObjectsDirty[addr] = struct{}{}
+	// }
+
 	for hash, logs := range self.logs {
 		state.logs[hash] = make([]*types.Log, len(logs))
 		copy(state.logs[hash], logs)

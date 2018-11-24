@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	log "github.com/sirupsen/logrus"
 )
 
 //type value interface{}
 
 // Callback func node
-type Callback func(*Node, interface{}) error
+type Callback func(*Node, interface{}) (interface{}, error)
 
 // Task struct
 type Task struct {
@@ -123,12 +123,12 @@ func (dp *Dispatcher) execute() error {
 						log.Debug("Stoped Dag Dispatcher.")
 						return
 					case msg := <-dp.queueCh:
-						err = dp.cb(msg, dp.context)
+						lastState, err := dp.cb(msg, dp.context)
 
 						if err != nil {
 							dp.Stop()
 						} else {
-							isFinish, err := dp.onCompleteParentTask(msg)
+							isFinish, err := dp.onCompleteParentTask(msg, lastState)
 							if err != nil {
 								log.Debug("Stoped Dag Dispatcher.err:" + err.Error())
 								dp.Stop()
@@ -180,15 +180,21 @@ func (dp *Dispatcher) push(vertx *Node) {
 }
 
 // CompleteParentTask completed parent tasks
-func (dp *Dispatcher) onCompleteParentTask(node *Node) (bool, error) {
+func (dp *Dispatcher) onCompleteParentTask(node *Node, lastState interface{}) (bool, error) {
 	dp.muTask.Lock()
 	defer dp.muTask.Unlock()
 
 	key := node.key
 
 	vertices := dp.dag.GetChildrenNodes(key)
+	//只有一个依赖的情况，可以直接引用上个statedb，只有后面分叉的情况才需要再次copy多个statedb
+	var lastStateDb interface{}
+	if len(vertices) == 1 {
+		lastStateDb = lastState
+	}
+
 	for _, node := range vertices {
-		err := dp.updateDependenceTask(node.key)
+		err := dp.updateDependenceTask(node.key, lastStateDb)
 		if err != nil {
 			return false, err
 		}
@@ -207,10 +213,12 @@ func (dp *Dispatcher) onCompleteParentTask(node *Node) (bool, error) {
 }
 
 // updateDependenceTask task counter
-func (dp *Dispatcher) updateDependenceTask(key interface{}) error {
+func (dp *Dispatcher) updateDependenceTask(key interface{}, lastState interface{}) error {
 	if _, ok := dp.tasks[key]; ok {
 		dp.tasks[key].dependence--
 		if dp.tasks[key].dependence == 0 {
+			//加入lastState的传递
+			dp.tasks[key].node.lastState = lastState
 			dp.push(dp.tasks[key].node)
 		}
 		if dp.tasks[key].dependence < 0 {

@@ -14,6 +14,7 @@ type Node struct {
 	index         int
 	children      []*Node
 	parentCounter int
+	lastState     interface{}
 }
 
 // Errors
@@ -37,6 +38,11 @@ func NewNode(key interface{}, index int) *Node {
 // Index return node index
 func (n *Node) Index() int {
 	return n.index
+}
+
+// Index return node index
+func (n *Node) LastState() interface{} {
+	return n.lastState
 }
 
 // Dag struct
