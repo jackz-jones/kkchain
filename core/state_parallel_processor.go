@@ -22,7 +22,7 @@ var (
 	//problem:setup different concurrent coroutine will generate different results,
 	//        so we must the num of  coroutine by the number of transactions executed concurrently for the first time
 	// setup ParallelNum 0 means ParallelNum will be config by dispathcer
-	ParallelNum = 0
+	ParallelNum = 2
 	// VerifyExecutionTimeout 0 means unlimited
 	VerifyExecutionTimeout = 0
 	ErrInvalidDagBlock     = errors.New("block's dag is incorrect")
@@ -243,16 +243,15 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 	pendingCount := 0
 
 	log.Info("gas pool:", gasPool)
+	for a, acctxs := range txMaps {
+		for _, tx := range acctxs {
+			log.WithFields(log.Fields{"from": a.String(), "tx": tx.Hash().String()}).Info("total tx")
+		}
+	}
 
 	for acc, txs := range txMaps {
 		parallelCh <- true
-
 		pend.Add(1)
-
-		applyTxs := make(types.Transactions, len(txs))
-		for i, l := range txs {
-			applyTxs[i] = l
-		}
 
 		go func(acc common.Address, accTxs types.Transactions) {
 			defer func() {
@@ -312,8 +311,8 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 			if err != nil {
 				log.WithFields(log.Fields{"acc": acc.String(), "nonce": statedb.GetNonce(acc)}).Info("merge failed")
 				//TODO: if conflict, the remain txs save to pending txmap
-				pending[acc] = txs
-				pendingCount += txs.Len()
+				pending[acc] = accTxs
+				pendingCount += accTxs.Len()
 				lock.Unlock()
 				return
 			}
@@ -328,18 +327,18 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 
 			lock.Unlock()
 
-		}(acc, applyTxs)
+		}(acc, txs)
 	}
 
 	pend.Wait()
 
 	close(parallelCh)
 
-	//TODO：serially execute txs in pending txmap
+	//TODO：serially execute txs in pending tx map
 	log.WithFields(log.Fields{"pending": pendingCount}).Info("serially execute")
-	for a, acctxs := range txMaps {
+	for a, acctxs := range pending {
 		for _, tx := range acctxs {
-			log.WithFields(log.Fields{"from": a, "tx": tx.Hash().String()}).Info("serially execute")
+			log.WithFields(log.Fields{"from": a.String(), "tx": tx.Hash().String(), "nonce": statedb.GetNonce(a)}).Info("serially execute")
 		}
 	}
 

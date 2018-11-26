@@ -474,6 +474,7 @@ func (self *StateDB) Copy() *StateDB {
 	return state
 }
 
+
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
 func (self *StateDB) CopyWithStateObjects() *StateDB {
