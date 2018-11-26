@@ -188,7 +188,7 @@ var (
 
 	signer = types.NewInitialSigner(new(big.Int).SetInt64(1))
 
-	number = 2000
+	number = 1000
 	//3000*3=9000千条交易，并发执行采用copy的方式，需要占用5GB左右内存。必须缩减这个占用的内存才行。
 	//考虑以什么方式可以减少copy的次数
 )
@@ -228,8 +228,16 @@ func TestTxsSequenceExecutePerformance(t *testing.T) {
 			// }
 			// number+1条tx : 1条：add4创建一个新合约  numnber条：addr4 调用新合约的方法
 			//先创建一个另外的新的合约，再开始调用
-			createContractTxNew, _ := types.SignTx(types.NewContractCreation(gen.TxNonce(addr4), big.NewInt(0), initcreateContractGas+storageContranctDataGasNew, new(big.Int).SetInt64(1), codeByteDataNew), signer, key4)
+			createContractTxNew, err := types.SignTx(types.NewContractCreation(gen.TxNonce(addr4), big.NewInt(0), initcreateContractGas+storageContranctDataGasNew, new(big.Int).SetInt64(1), codeByteDataNew), signer, key4)
+			if err != nil {
+				fmt.Printf("！！！sign tx err:%v", err)
+			}
+			//fmt.Printf(" QQQQ----createContractTxNew : %#v \n", createContractTxNew)
 			gen.AddTx(createContractTxNew)
+			// txs := gen.GetTxs()
+			// for i = 0; i < len(txs); i++ {
+			// 	fmt.Printf(" 00000----gen.GetTxs txs : %#v \n", txs[0].Hash().String())
+			// }
 			msg, _ := createContractTxNew.AsMessage(types.NewInitialSigner(gspec.Config.ChainID))
 			contractAddrNew := crypto.CreateAddress(msg.From(), createContractTxNew.Nonce())
 			for k := 0; k < number; k++ {
@@ -247,43 +255,98 @@ func TestTxsSequenceExecutePerformance(t *testing.T) {
 			}
 			t2 := time.Now()
 			fmt.Println("test case1 sequence(", number, "tx:transfer,", number, "tx:create contract,", number, "tx:invoke contract) spend time:", t2.Sub(t1))
-		case 1:
-			// number条tx : addr1 sends addr2 some ether.
-			t1 := time.Now()
+		// case 1:
+		// 	// number条tx : addr1 sends addr2 some ether.
+		// 	t1 := time.Now()
 
+		// 	dag := dag.NewDag()
+		// 	//number = 500
+		// 	//txArray1 := make([]*types.Transaction, number)
+		// 	// for k := 0; k < number; k++ {
+		// 	// 	txArray1[k], _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(50), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
+		// 	// 	gen.AddTx(txArray1[k])
+		// 	// 	dag.AddNode(txArray1[k].Hash().String())
+		// 	// 	if k > 0 {
+		// 	// 		dag.AddEdge(txArray1[k-1].Hash().String(), txArray1[k].Hash().String())
+		// 	// 	}
+		// 	// }
+		// 	// // number条tx : addr3 create contract
+		// 	// txArray2 := make([]*types.Transaction, number)
+		// 	// for k := 0; k < number; k++ {
+		// 	// 	//注意：如果设置amount大于0，evm执行则会返回reverted错误
+		// 	// 	txArray2[k], _ = types.SignTx(types.NewContractCreation(gen.TxNonce(addr3), big.NewInt(0), initcreateContractGas+storageContranctDataGas, new(big.Int).SetInt64(1), codeByteData), signer, key3)
+		// 	// 	gen.AddTx(txArray2[k])
+		// 	// 	dag.AddNode(txArray2[k].Hash().String())
+		// 	// 	if k > 0 {
+		// 	// 		dag.AddEdge(txArray2[k-1].Hash().String(), txArray2[k].Hash().String())
+		// 	// 	}
+		// 	// }
+		// 	// // number+1条tx : 1条：add4创建一个新合约  numnber条：addr4 调用新合约的方法
+		// 	// //先创建一个另外的新的合约，再开始调用
+		// 	createContractTxNew, _ := types.SignTx(types.NewContractCreation(gen.TxNonce(addr4), big.NewInt(0), initcreateContractGas+storageContranctDataGasNew, new(big.Int).SetInt64(1), codeByteDataNew), signer, key4)
+		// 	gen.AddTx(createContractTxNew)
+		// 	dag.AddNode(createContractTxNew.Hash().String())
+		// 	msg, _ := createContractTxNew.AsMessage(types.NewInitialSigner(gspec.Config.ChainID))
+		// 	contractAddrNew := crypto.CreateAddress(msg.From(), createContractTxNew.Nonce())
+		// 	txArray3 := make([]*types.Transaction, number)
+		// 	for k := 0; k < number; k++ {
+		// 		txArray3[k], _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr4), contractAddrNew, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key4)
+		// 		gen.AddTx(txArray3[k])
+		// 		dag.AddNode(txArray3[k].Hash().String())
+		// 		if k == 0 {
+		// 			dag.AddEdge(createContractTxNew.Hash().String(), txArray3[k].Hash().String())
+		// 		}
+		// 		if k > 0 {
+		// 			dag.AddEdge(txArray3[k-1].Hash().String(), txArray3[k].Hash().String())
+		// 		}
+		// 	}
+
+		// 	createContractTxNew, _ = types.SignTx(types.NewContractCreation(gen.TxNonce(addr3), big.NewInt(0), initcreateContractGas+storageContranctDataGasNew, new(big.Int).SetInt64(1), codeByteData), signer, key3)
+		// 	gen.AddTx(createContractTxNew)
+		// 	dag.AddNode(createContractTxNew.Hash().String())
+		// 	msg, _ = createContractTxNew.AsMessage(types.NewInitialSigner(gspec.Config.ChainID))
+		// 	contractAddrNew = crypto.CreateAddress(msg.From(), createContractTxNew.Nonce())
+		// 	txArray3 = make([]*types.Transaction, number)
+		// 	for k := 0; k < number; k++ {
+		// 		txArray3[k], _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr3), contractAddrNew, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key3)
+		// 		gen.AddTx(txArray3[k])
+		// 		dag.AddNode(txArray3[k].Hash().String())
+		// 		if k == 0 {
+		// 			dag.AddEdge(createContractTxNew.Hash().String(), txArray3[k].Hash().String())
+		// 		}
+		// 		if k > 0 {
+		// 			dag.AddEdge(txArray3[k-1].Hash().String(), txArray3[k].Hash().String())
+		// 		}
+		// 	}
+		// 	t2 := time.Now()
+		// 	fmt.Println("test case1 concurrent exexcute(", number, "tx:transfer,", number, "tx:create contract,", number, "tx:invoke contract) spend time:", t2.Sub(t1))
+		// 	//fmt.Println("!!!!!ExecutionDag:" + dag.String() + "\n")
+		// 	gen.AddExecutionDag(*dag)
+		case 1:
+			//并发处理tx，
+			//1.先加入tx，产生dag
+			fmt.Printf("************************************\n")
+			t1 := time.Now()
 			dag := dag.NewDag()
-			//number = 500
-			//txArray1 := make([]*types.Transaction, number)
-			// for k := 0; k < number; k++ {
-			// 	txArray1[k], _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(50), params.TxGas, new(big.Int).SetInt64(1), nil), signer, key1)
-			// 	gen.AddTx(txArray1[k])
-			// 	dag.AddNode(txArray1[k].Hash().String())
-			// 	if k > 0 {
-			// 		dag.AddEdge(txArray1[k-1].Hash().String(), txArray1[k].Hash().String())
-			// 	}
+			createContractTxNew, err := types.SignTx(types.NewContractCreation(gen.TxNonce(addr4), big.NewInt(0), initcreateContractGas+storageContranctDataGasNew, new(big.Int).SetInt64(1), codeByteDataNew), signer, key4)
+			if err != nil {
+				fmt.Printf("Sign createContractTxNew err:%v", err)
+			}
+			// fmt.Printf(" KKKK----createContractTxNew : %#v \n", createContractTxNew.Hash().String())
+			gen.AddTxJust(createContractTxNew)
+			// txs := gen.GetTxs()
+			// for i = 0; i < len(txs); i++ {
+			// 	fmt.Printf("-----@@@@@qqqqqq----gen.GetTxs tx : %#v \n", txs[i].Hash().String())
 			// }
-			// // number条tx : addr3 create contract
-			// txArray2 := make([]*types.Transaction, number)
-			// for k := 0; k < number; k++ {
-			// 	//注意：如果设置amount大于0，evm执行则会返回reverted错误
-			// 	txArray2[k], _ = types.SignTx(types.NewContractCreation(gen.TxNonce(addr3), big.NewInt(0), initcreateContractGas+storageContranctDataGas, new(big.Int).SetInt64(1), codeByteData), signer, key3)
-			// 	gen.AddTx(txArray2[k])
-			// 	dag.AddNode(txArray2[k].Hash().String())
-			// 	if k > 0 {
-			// 		dag.AddEdge(txArray2[k-1].Hash().String(), txArray2[k].Hash().String())
-			// 	}
-			// }
-			// // number+1条tx : 1条：add4创建一个新合约  numnber条：addr4 调用新合约的方法
-			// //先创建一个另外的新的合约，再开始调用
-			createContractTxNew, _ := types.SignTx(types.NewContractCreation(gen.TxNonce(addr4), big.NewInt(0), initcreateContractGas+storageContranctDataGasNew, new(big.Int).SetInt64(1), codeByteDataNew), signer, key4)
-			gen.AddTx(createContractTxNew)
 			dag.AddNode(createContractTxNew.Hash().String())
 			msg, _ := createContractTxNew.AsMessage(types.NewInitialSigner(gspec.Config.ChainID))
 			contractAddrNew := crypto.CreateAddress(msg.From(), createContractTxNew.Nonce())
 			txArray3 := make([]*types.Transaction, number)
 			for k := 0; k < number; k++ {
-				txArray3[k], _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr4), contractAddrNew, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key4)
-				gen.AddTx(txArray3[k])
+				//这里和顺序执行的区别是：顺序执行执行AddTx后，相应地址的nonce已经加一，而并发执行调用的是AddTxJust，state还没实现加一
+				//这样最后并发一起执行的时候，就会报nonce too low的错误。解决方法，手动给相同地址的nonce+1
+				txArray3[k], _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr4)+uint64(k+1), contractAddrNew, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key4)
+				gen.AddTxJust(txArray3[k])
 				dag.AddNode(txArray3[k].Hash().String())
 				if k == 0 {
 					dag.AddEdge(createContractTxNew.Hash().String(), txArray3[k].Hash().String())
@@ -293,15 +356,20 @@ func TestTxsSequenceExecutePerformance(t *testing.T) {
 				}
 			}
 
-			createContractTxNew, _ = types.SignTx(types.NewContractCreation(gen.TxNonce(addr3), big.NewInt(0), initcreateContractGas+storageContranctDataGasNew, new(big.Int).SetInt64(1), codeByteData), signer, key3)
-			gen.AddTx(createContractTxNew)
+			createContractTxNew, err = types.SignTx(types.NewContractCreation(gen.TxNonce(addr3), big.NewInt(0), initcreateContractGas+storageContranctDataGasNew, new(big.Int).SetInt64(1), codeByteData), signer, key3)
+			if err != nil {
+				fmt.Printf("Sign createContractTxNew err:%v", err)
+			}
+			gen.AddTxJust(createContractTxNew)
 			dag.AddNode(createContractTxNew.Hash().String())
 			msg, _ = createContractTxNew.AsMessage(types.NewInitialSigner(gspec.Config.ChainID))
 			contractAddrNew = crypto.CreateAddress(msg.From(), createContractTxNew.Nonce())
 			txArray3 = make([]*types.Transaction, number)
 			for k := 0; k < number; k++ {
-				txArray3[k], _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr3), contractAddrNew, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key3)
-				gen.AddTx(txArray3[k])
+				//这里和顺序执行的区别是：顺序执行执行AddTx后，相应地址的nonce已经加一，而并发执行调用的是AddTxJust，state还没实现加一
+				//这样最后并发一起执行的时候，就会报nonce too low的错误。解决方法，手动给相同地址的nonce+1
+				txArray3[k], _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr3)+uint64(k+1), contractAddrNew, big.NewInt(0), initcreateContractGas+1000, new(big.Int).SetInt64(1), inputByteData1), signer, key3)
+				gen.AddTxJust(txArray3[k])
 				dag.AddNode(txArray3[k].Hash().String())
 				if k == 0 {
 					dag.AddEdge(createContractTxNew.Hash().String(), txArray3[k].Hash().String())
@@ -310,10 +378,18 @@ func TestTxsSequenceExecutePerformance(t *testing.T) {
 					dag.AddEdge(txArray3[k-1].Hash().String(), txArray3[k].Hash().String())
 				}
 			}
+			gen.AddExecutionDag(*dag)
+			//fmt.Println("!!!!!ExecutionDag:" + dag.String() + "\n")
+			//2.再并发执行区块里的tx得到receipt
+			// txs := gen.GetTxs()
+			// for i = 0; i < len(txs); i++ {
+			// 	fmt.Printf(" @@@@@ last---gen.GetTxs tx : %#v \n", txs[i].Hash().String())
+			// }
+			gen.ExecuteTxsParallel()
+
 			t2 := time.Now()
 			fmt.Println("test case1 concurrent exexcute(", number, "tx:transfer,", number, "tx:create contract,", number, "tx:invoke contract) spend time:", t2.Sub(t1))
-			//fmt.Println("!!!!!ExecutionDag:" + dag.String() + "\n")
-			gen.AddExecutionDag(*dag)
+
 			// case 2:
 			// 	// 3*number条tx : addr1 sends addr2 some ether.
 			// 	t1 := time.Now()

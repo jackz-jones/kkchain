@@ -126,6 +126,7 @@ func (dp *Dispatcher) execute() error {
 						lastState, err := dp.cb(msg, dp.context)
 
 						if err != nil {
+							log.Error("dispatcher run callback function error!!Error:", err)
 							dp.Stop()
 						} else {
 							isFinish, err := dp.onCompleteParentTask(msg, lastState)

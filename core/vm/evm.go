@@ -330,7 +330,7 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 	}
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
-
+	//log.Info("!!!create contract Set caller nonnce,addr:", caller.Address().String(), "value:", nonce+1)
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
@@ -340,6 +340,7 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 	snapshot := evm.StateDB.Snapshot()
 	evm.StateDB.CreateAccount(address)
 	evm.StateDB.SetNonce(address, 1)
+	//log.Info("!!!create contract Set contract addr  nonnce,addr:", address.String(), "value:", 1)
 	evm.Transfer(evm.StateDB, caller.Address(), address, value)
 
 	// initialise a new contract and set the code that is to be used by the

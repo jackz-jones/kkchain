@@ -94,7 +94,7 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 		// TODO: if system occurs, the block won't be retried any more
 		ctx := context.(*verifyCtx)
 		block := ctx.block
-		mergeCh := ctx.mergeCh
+		//mergeCh := ctx.mergeCh
 		lastStateDb := node.LastState()
 
 		idx := node.Index()
@@ -105,10 +105,10 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 
 		usedGasArray[idx] = new(uint64)
 
-		log.Debug("execute tx." + tx.Hash().String())
+		//log.Info("execute tx " + string(idx) + ",hash:" + tx.Hash().String())
 
 		//这一段copy消耗了太多时间，没有这段，3000条tx用时274ms，有了这段，需要3.6s还不算合并的
-		mergeCh <- true
+		//mergeCh <- true
 		//execute tx
 		// for addr, stateObject := range statedb.GetStateObjects() {
 		// 	fmt.Printf("!!!!----4444遍历stateDb.stateObjects addr %#v,version %d \n", addr.String(), stateObject.GetVersion())
@@ -131,7 +131,7 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 		// }
 		txStateDb.Prepare(tx.Hash(), block.Hash(), idx)
 		//statedb.Prepare(tx.Hash(), block.Hash(), idx)
-		<-mergeCh
+		//<-mergeCh
 
 		//fmt.Printf("^^^^^^^---Begin exectute tx:%d \n", idx)
 		//statedb.Prepare(tx.Hash(), block.Hash(), idx)
@@ -146,12 +146,13 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 		//fmt.Printf("mmmmmm!!!!Process txstatedb.trie.Hash() %v\n", txStateDb.GetTrie().Hash().String())
 		//receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, stateDb, header, tx, usedGas, cfg)
 		if err != nil {
+			fmt.Printf("ApplyTransaction err:%#v\n", err)
 			return nil, err
 		}
 		receiptsArray[idx] = receipt
-		//fmt.Printf("#####receiptsArray[%d] txHash : %v \n", idx, receiptsArray[idx].TxHash.String())
+		//fmt.Printf("#####赋值 receiptsArray[%d] txHash : %v \n", idx, receiptsArray[idx].TxHash.String())
 
-		mergeCh <- true
+		//mergeCh <- true
 		//merge statedb
 		//fmt.Printf("!!!begin merge txstatedb.txidx: %d \n", idx)
 		//fmt.Printf("***********6666***************txStateDb version :%d\n", txStateDb.GetSnapshotVersion())
@@ -173,7 +174,7 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 		// fmt.Printf("!!#######tx:%d,add4 balance  : %#v \n ", idx, statedb.GetBalance(addr4))
 		//fmt.Printf("-------------------------------!!!Merge txstatedb success.txidx: %d \n", idx)
 		//fmt.Printf("QQQQQQQ!!!!Process statedb.trie.Hash() %v\n", statedb.GetTrie().Hash().String())
-		<-mergeCh
+		//<-mergeCh
 		return txStateDb, nil
 	})
 
@@ -183,7 +184,7 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 			"err:" + err.Error() + "\n")
 		return nil, nil, 0, err
 	}
-	fmt.Printf("@@@@@@@@@@@@@@@!!!总共引用上次的stateDB的次数为 %d", count)
+	fmt.Printf("@@@@@@@@@@@@@@@!!!总共引用上次的stateDB的次数为 %d\n", count)
 	// fmt.Printf("555555!!!!Process writeBlock num %d,hash  : %#v ,stateroot: %#v\n ", block.Header().Number, block.Hash().String(),
 	// 	block.StateRoot().String())
 	// fmt.Printf("888888!!!!Process statedb.trie.Hash() %v\n", statedb.GetTrie().Hash().String())
@@ -207,13 +208,21 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 	// fmt.Printf("6666!!!!Process writeBlock num %d,hash  : %#v ,stateroot: %#v\n ", block.Header().Number, block.Hash().String(),
 	// 	block.StateRoot().String())
 
+	// fmt.Printf("------len(receiptsArray) :%d\n", len(receiptsArray))
+	// for i, receipts := range receiptsArray {
+	// 	fmt.Printf("!!!receiptsArray[%d] txHash : %#v \n", i, receipts)
+	// }
 	//merge receipts,allLogs
 	for i := 0; i < block.Txs.Len(); i++ {
-		//fmt.Printf("!!!receiptsArray[%d] txHash : %v \n", i, receiptsArray[i].TxHash.String())
+		//fmt.Printf("遍历receiptsArray[%d] txHash : %#v \n", i, receiptsArray[i].TxHash.String())
 		receipts = append(receipts, receiptsArray[i])
 		allLogs = append(allLogs, receiptsArray[i].Logs...)
 		*usedGas += *usedGasArray[i]
 	}
+
+	//设置usedGas费用
+	//fmt.Println("-----------total GasUsed %d", *usedGas)
+	block.Header().GasUsed = *usedGas
 
 	//检验receipts
 	// receiptSha := types.DeriveSha(receipts)

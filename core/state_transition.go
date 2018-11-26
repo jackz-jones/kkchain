@@ -156,6 +156,7 @@ func (st *StateTransition) preCheck() error {
 		if nonce < st.msg.Nonce() {
 			return ErrNonceTooHigh
 		} else if nonce > st.msg.Nonce() {
+			log.Error("errNonceTooLow,addr:", st.msg.From().String(), ",nonce:", nonce, ",st.msg.Nonce():", st.msg.Nonce())
 			return errNonceTooLow
 		}
 	}
@@ -196,6 +197,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		//log.Info("Set nonnce,addr:", msg.From().String(), "value:", st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 	if vmerr != nil {

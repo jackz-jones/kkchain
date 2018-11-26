@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/hashicorp/golang-lru"
 	"github.com/invin/kkchain/common"
@@ -908,10 +909,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		// fmt.Printf("1111*****WriteBlockWithState block.hash: %v \n", block.Hash().String())
 		// fmt.Printf("1111*****WriteBlockWithState block.Header.hash: %v \n", block.Header().Hash().String())
 		// Process block using the parent state as reference point.
+		t1 := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}
+		t2 := time.Now()
+		fmt.Println("----------- processor.Process  spend time.", t2.Sub(t1))
 		// var (
 		// 	key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		// 	key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")

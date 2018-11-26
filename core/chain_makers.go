@@ -21,10 +21,11 @@ import (
 // BlockGen creates blocks for testing.
 // See GenerateChain for a detailed explanation.
 type BlockGen struct {
-	i           int
-	parent      *types.Block
-	chain       []*types.Block
-	chainReader consensus.ChainReader
+	i      int
+	parent *types.Block
+	chain  []*types.Block
+	//chainReader consensus.ChainReader
+	chainReader *BlockChain
 	header      *types.Header
 	statedb     *state.StateDB
 
@@ -267,6 +268,10 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		panic(err)
 	}
 	b.txs = append(b.txs, tx)
+	// fmt.Printf("---- WWWW1111----AddTxWithChain len(b.txs) :%d\n", len(b.txs))
+	// for i := 0; i < len(b.txs); i++ {
+	// 	fmt.Printf(" WWWW1111----AddTxWithChain txs %i: %#v \n", i, b.txs[i].Hash().String())
+	// }
 	b.receipts = append(b.receipts, receipt)
 }
 
@@ -285,4 +290,45 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 //AddExecutionDag adds Transaction execution diagram
 func (b *BlockGen) AddExecutionDag(executionDag dag.Dag) {
 	b.executionDag = executionDag
+}
+
+func (b *BlockGen) GetTxs() []*types.Transaction {
+	return b.txs
+}
+
+func (b *BlockGen) AddTxJust(tx *types.Transaction) {
+	b.txs = append(b.txs, tx)
+	// fmt.Printf("---- KKKK1111----AddTxJust len(b.txs) :%d\n", len(b.txs))
+	// for i := 0; i < len(b.txs); i++ {
+	// 	fmt.Printf(" KKKK1111----AddTxJust txs %i: %#v \n", i, b.txs[i].Hash().String())
+	// }
+
+}
+
+func (b *BlockGen) ExecuteTxsParallel() {
+	if b.gasPool == nil {
+		b.SetCoinbase(common.Address{})
+	}
+	tmpBlock := types.NewBlockWithDag(b.header, b.txs, b.receipts, b.executionDag)
+	//tmpBlock.Head = b.header
+	// parallelBlockchain, err := NewBlockChain(b.config, vm.Config{}, memdb.New(), b.engine)
+	// if err != nil {
+	// 	fmt.Printf("new parallelBlockchain  err:%v \n", err)
+	// }
+	// for _, tx := range tmpBlock.Transactions() {
+	// 	fmt.Printf("!!!tmpBlock  tx : %#v \n", tx.Hash().String())
+	// }
+	//fmt.Println("-------before process,b.header.gasUed:", b.header.GasUsed)
+	parallelProcessor := NewStateParallelProcessor(params.TestChainConfig, b.chainReader)
+	receiptsArray, _, gasUsed, err := parallelProcessor.Process(tmpBlock, b.statedb, vm.Config{})
+	b.header.GasUsed = gasUsed
+	if err != nil {
+		panic(err)
+	}
+	//fmt.Println("--------after,process,b.header.gasUed:", b.header.GasUsed)
+	// for i, receipt := range receiptsArray {
+	// 	fmt.Printf("tx:%d,receipt.logs", i, receipt.Logs)
+	// }
+
+	b.receipts = append(b.receipts, receiptsArray...)
 }
