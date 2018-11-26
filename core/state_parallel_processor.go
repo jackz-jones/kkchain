@@ -236,18 +236,25 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 
 	parallelCh := make(chan bool, parallel)
 	gasPool := new(GasPool).AddGas(header.GasLimit)
-	lock := &sync.RWMutex{}
+	lock := &sync.Mutex{}
 	var pend sync.WaitGroup
 
-	for _, txs := range txMaps {
+	pending := make(map[common.Address]types.Transactions)
+	pendingCount := 0
+
+	log.Info("gas pool:", gasPool)
+
+	for acc, txs := range txMaps {
 		parallelCh <- true
 
-		lock.Lock()
-		gp := new(GasPool).AddGas(gasPool.Gas())
-		lock.Unlock()
-
 		pend.Add(1)
-		go func(accTxs types.Transactions) {
+
+		applyTxs := make(types.Transactions, len(txs))
+		for i, l := range txs {
+			applyTxs[i] = l
+		}
+
+		go func(acc common.Address, accTxs types.Transactions) {
 			defer func() {
 				<-parallelCh
 			}()
@@ -257,20 +264,27 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 			txState := statedb.Copy()
 			usedGas := new(uint64)
 
+			lock.Lock()
+			gp := new(GasPool).AddGas(gasPool.Gas())
+			lock.Unlock()
+
+			var accExecutedTx types.Transactions
+			var accReceipts types.Receipts
+
 			// Iterate over and process the individual transactions
 			for i, tx := range accTxs {
-
-				log.WithFields(log.Fields{"gasPool": gasPool, "tx": tx.Hash().String()}).Info("new tx prepare to execute")
+				from, _ := types.Sender(types.NewInitialSigner(p.config.ChainID), tx)
+				log.WithFields(log.Fields{"gasPool": gasPool, "tx": tx.Hash().String(), "from": from.String()}).Info("new tx prepare to execute")
 				// If we don't have enough gas for any further transactions then we're done
-				if gasPool.Gas() < params.TxGas {
-					log.WithFields(log.Fields{"have": gasPool, "want": params.TxGas}).Debug("Not enough gas for further transactions")
+				if gp.Gas() < params.TxGas {
+					log.WithFields(log.Fields{"have": gp, "want": params.TxGas}).Debug("Not enough gas for further transactions")
 					break
 				}
 
 				// Start executing the transaction
 				txState.Prepare(tx.Hash(), common.Hash{}, i)
 				snap := txState.Snapshot()
-				receipt, gas, err := ApplyTransaction(p.config, p.bc, &header.Miner, gp, txState, header, tx, usedGas, vm.Config{})
+				receipt, _, err := ApplyTransaction(p.config, p.bc, &header.Miner, gp, txState, header, tx, usedGas, vm.Config{})
 				if err != nil {
 					log.WithFields(log.Fields{"tx": tx.Hash().String(), "err": err}).Info("execute failed")
 					txState.RevertToSnapshot(snap)
@@ -278,24 +292,43 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 				}
 				log.WithFields(log.Fields{"tx": tx.Hash().String()}).Info("execute success")
 
-				//TODO: merge to stateDb, bypass collect conflicts and dependencies
-
-				lock.Lock()
-				//TODO: if conflict, the remain txs save to pending txmap
-
-				//if don't conflict, execute successful, then append to returns
-				executedTx = append(executedTx, tx)
-				receipts = append(receipts, receipt)
-				header.GasUsed += gas
-				gasPool.SubGas(gas)
-
-				//TODO：add dag
-
-				lock.Unlock()
+				accExecutedTx = append(accExecutedTx, tx)
+				accReceipts = append(accReceipts, receipt)
 
 			}
 
-		}(txs)
+			lock.Lock()
+			//other goroutine has execute over
+			if err := gasPool.SubGas(*usedGas); err != nil {
+				log.WithFields(log.Fields{"acc": acc.String(), "gasPool": gasPool, "used gas": *usedGas, "err": err}).Info("execute error")
+				lock.Unlock()
+				return
+			}
+
+			log.WithFields(log.Fields{"acc": acc.String(), "gasPool": gasPool, "used gas": *usedGas}).Info("gas pool")
+
+			//merge to stateDb, bypass collect conflicts and dependencies
+			err := statedb.Merge(txState, nil)
+			if err != nil {
+				log.WithFields(log.Fields{"acc": acc.String(), "nonce": statedb.GetNonce(acc)}).Info("merge failed")
+				//TODO: if conflict, the remain txs save to pending txmap
+				pending[acc] = txs
+				pendingCount += txs.Len()
+				lock.Unlock()
+				return
+			}
+			log.WithFields(log.Fields{"acc": acc.String(), "nonce": statedb.GetNonce(acc)}).Info("merge success")
+
+			//if don't conflict, execute successful, then append to returns
+			executedTx = append(executedTx, accExecutedTx...)
+			receipts = append(receipts, accReceipts...)
+			header.GasUsed += *usedGas
+
+			//TODO：add dag
+
+			lock.Unlock()
+
+		}(acc, applyTxs)
 	}
 
 	pend.Wait()
@@ -303,7 +336,20 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 	close(parallelCh)
 
 	//TODO：serially execute txs in pending txmap
+	log.WithFields(log.Fields{"pending": pendingCount}).Info("serially execute")
+	for a, acctxs := range txMaps {
+		for _, tx := range acctxs {
+			log.WithFields(log.Fields{"from": a, "tx": tx.Hash().String()}).Info("serially execute")
+		}
+	}
 
-	log.WithFields(log.Fields{"executed_tx_count": executedTx.Len()}).Info("ApplyTransactions over")
+	processor := NewStateProcessor(p.config, p.bc)
+	pendingTxs, pendingReceipts, err := processor.ApplyTransactions(pending, pendingCount, header, statedb)
+	if err == nil {
+		executedTx = append(executedTx, pendingTxs...)
+		receipts = append(receipts, pendingReceipts...)
+	}
+
+	log.WithFields(log.Fields{"executed_tx_count": executedTx.Len(), "gas pool": gasPool}).Info("ApplyTransactions over")
 	return executedTx, receipts, nil
 }

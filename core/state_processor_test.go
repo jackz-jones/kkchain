@@ -101,6 +101,10 @@ func TestStateProcessor_ApplyTransactions(t *testing.T) {
 
 	//txMaps, txcount := genTestTxsMap(chainConfig.ChainID)
 
+	statedb.Commit(false)
+
+	statedb2 := statedb.Copy()
+
 	header := &types.Header{
 		Miner:       miner,
 		Number:      big.NewInt(int64(0)),
@@ -113,7 +117,7 @@ func TestStateProcessor_ApplyTransactions(t *testing.T) {
 	}
 
 	start := time.Now()
-	executedTxs, receipts, err := processor.ApplyTransactions(txMaps, txcount, header, statedb)
+	executedTxs, receipts, err := processor.ApplyTransactions(txMaps, txcount, header, statedb2)
 	if err != nil {
 		return
 	}
@@ -121,13 +125,13 @@ func TestStateProcessor_ApplyTransactions(t *testing.T) {
 	fmt.Printf("#####ApplyTransactions[%d/%d] cost %v\n", executedTxs.Len(), txcount, end.Sub(start))
 
 	for i, tx := range executedTxs {
-		fmt.Printf("#####tx[%d]: %s, cost: %d\n", i, tx.Hash().String(), receipts[i].GasUsed)
+		fmt.Printf("#####tx[%d]: %s, cost: %d, GasUsed: %d, CumulativeGasUsed: %d\n", i, tx.Hash().String(), receipts[i].GasUsed, receipts[i].GasUsed, receipts[i].CumulativeGasUsed)
 	}
 
-	obj := statedb.GetOrNewStateObject(addr)
+	obj := statedb2.GetOrNewStateObject(addr)
 	fmt.Printf("%s:{nonce: %d, balance: %d}\n", obj.Address().String(), obj.Nonce(), obj.Balance())
 
-	fmt.Printf("to: %d\nminer: %d\n", statedb.GetBalance(to), statedb.GetBalance(miner))
+	fmt.Printf("to: %d\nminer: %d\n", statedb2.GetBalance(to), statedb2.GetBalance(miner))
 
 }
 
@@ -151,4 +155,10 @@ func TestStateProcessor_test(t *testing.T) {
 	fmt.Printf("result %p\n", result)
 	fmt.Println("dataappend length:", len(dataappend), "cap:", cap(dataappend), ":", dataappend)
 	fmt.Printf("dataappend %p\n", dataappend)
+
+	pending := make(map[string][]int)
+	fmt.Printf("pending len %d\n", len(pending))
+	pending["123"] = []int{1, 2, 3}
+	fmt.Printf("pending len %d\n", len(pending))
+
 }

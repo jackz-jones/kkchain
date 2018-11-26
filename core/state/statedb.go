@@ -511,7 +511,72 @@ func (self *StateDB) CopyWithStateObjects() *StateDB {
 	return state
 }
 
-// Snapshot returns an identstateObjectsvision of the state.
+//TODO: compare contract account's state in future
+func (self *StateDB) IsConflict(children *StateDB, excepts map[common.Address]struct{}) bool {
+
+	//if stateObjects is empty, stateObjectsDirty is definitely empty.
+	if len(children.stateObjects) == 0 {
+		return false
+	}
+
+	for addr, _ := range children.stateObjects {
+
+		if excepts != nil {
+			if _, except := excepts[addr]; except {
+				continue
+			}
+		}
+
+		_, wFlag := self.stateObjectsDirty[addr]
+		if wFlag {
+			log.WithFields(log.Fields{"addr": addr.String()}).Info("parent has updated")
+			return true
+		}
+
+		_, wFlag = children.stateObjectsDirty[addr]
+		if _, wFlag2 := self.stateObjects[addr]; wFlag && wFlag2 {
+			log.WithFields(log.Fields{"addr": addr.String()}).Info("children updated")
+			return true
+		}
+	}
+
+	return false
+}
+
+func (self *StateDB) Merge(children *StateDB, excepts map[common.Address]struct{}) error {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
+	//check if there is a conflict, if there is, then return err and dependencies
+	if self.IsConflict(children, excepts) {
+		return errors.New("conflict")
+	}
+
+	//merge write state
+	for addr := range children.stateObjectsDirty {
+		self.stateObjectsDirty[addr] = struct{}{}
+		self.stateObjects[addr] = children.stateObjects[addr].deepCopy(self)
+	}
+
+	for addr, object := range children.stateObjects {
+		//merge read state.
+		//TODO: compare state version
+		if _, exist := children.stateObjectsDirty[addr]; !exist {
+			self.stateObjects[addr] = object.deepCopy(self)
+		}
+	}
+
+	for hash, logs := range self.logs {
+		self.logs[hash] = make([]*types.Log, len(logs))
+		copy(self.logs[hash], logs)
+	}
+	for hash, preimage := range self.preimages {
+		self.preimages[hash] = preimage
+	}
+	return nil
+}
+
+// Snapshot returns an identifier for the current revision of the state.
 func (self *StateDB) Snapshot() int {
 	id := self.nextRevisionId
 	self.nextRevisionId++

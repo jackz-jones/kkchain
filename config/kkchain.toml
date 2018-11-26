@@ -8,7 +8,7 @@ datadir = "data"
 ##### consensus configuration options #####
 [consensus]
 # Enable mining
-mine = false
+mine = true
 # Consensus type
 type = "pow"
 # Miner address
@@ -19,14 +19,14 @@ type = "pow"
 # Address to listen for incoming connections
 listen = "/ip4/127.0.0.1/tcp/9998"
 # Comma separated list of seed nodes to connect to
-seeds = ["89b8bb2b66a41220a9b8ba8f019c291dc69c8d9b1ee023813f9db8f8bdcd1f76@/ip4/127.0.0.1/tcp/9998"]
+#seeds = ["89b8bb2b66a41220a9b8ba8f019c291dc69c8d9b1ee023813f9db8f8bdcd1f76@/ip4/127.0.0.1/tcp/9998"]
 # Network private key file path
 privatekey = "node1.key"
 
 ##### dht configuration options #####
 [dht]
 # Bucket size of routine table
-bucketsize = 2
+bucketsize = 16
 
 ##### api configuration options #####
 [api]
