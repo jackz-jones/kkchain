@@ -115,7 +115,7 @@ func (p *StateProcessor) ApplyTransactions(txMaps map[common.Address]types.Trans
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			log.Info("Transaction failed, account skipped", "sender", from.String(), "hash:", tx.Hash().String(), "err:", err)
 			statedb.RevertToSnapshot(snap)
 		}
 

@@ -230,8 +230,6 @@ func (w *worker) commitTask() {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	if w.currentCtx != nil {
-	}
 	tstart := time.Now()
 	parent := w.chain.CurrentBlock()
 
