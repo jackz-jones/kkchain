@@ -2,17 +2,18 @@ package core
 
 import (
 	"crypto/ecdsa"
-	"math/big"
-	"testing"
-
 	"fmt"
+	"math/big"
+	"math/rand"
+	"testing"
+	"time"
+
 	"github.com/invin/kkchain/common"
 	"github.com/invin/kkchain/core/state"
 	"github.com/invin/kkchain/core/types"
 	"github.com/invin/kkchain/crypto"
 	"github.com/invin/kkchain/params"
 	"github.com/invin/kkchain/storage/memdb"
-	"time"
 )
 
 func transaction(nonce uint64, to common.Address, gaslimit uint64, chainId *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
@@ -51,7 +52,7 @@ func genTestTxsMap(chainId *big.Int) (map[common.Address]types.Transactions, int
 	return groups, count
 }
 
-func TestStateProcessor_ApplyTransactions(t *testing.T) {
+func TestStateProcessor_ApplyTransactions2(t *testing.T) {
 	t.Parallel()
 
 	db := memdb.New()
@@ -63,7 +64,8 @@ func TestStateProcessor_ApplyTransactions(t *testing.T) {
 
 	chainConfig := params.TestChainConfig
 
-	processor := NewStateParallelProcessor(chainConfig, nil)
+	//processor := NewStateParallelProcessor(chainConfig, nil)
+	processor := NewStateProcessor(chainConfig, nil)
 
 	key, _ := crypto.GenerateKey()
 
@@ -75,8 +77,9 @@ func TestStateProcessor_ApplyTransactions(t *testing.T) {
 
 	miner := common.HexToAddress("0x1e3d31aa1a7d72ac206bec98666a75968281655f")
 	to := common.HexToAddress("0xd67487d6b9aec47bb15bcefd0f606d14c642af3e")
+	to2 := common.HexToAddress("0x28426B47577f75ECb43a7C6076d55a513184CC54")
 
-	txcount := 2
+	txcount := 100
 	txMaps := map[common.Address]types.Transactions{}
 
 	txs := make(types.Transactions, txcount)
@@ -93,7 +96,7 @@ func TestStateProcessor_ApplyTransactions(t *testing.T) {
 	statedb.SetBalance(addr, new(big.Int).SetUint64(2e18))
 	txs = make(types.Transactions, txcount)
 	for i := 0; i < len(txs); i++ {
-		txs[i] = transaction(uint64(i), to, 200000, chainConfig.ChainID, key)
+		txs[i] = transaction(uint64(i), to2, 200000, chainConfig.ChainID, key)
 		fmt.Printf("tx hash: %s\n", txs[i].Hash().String())
 	}
 
@@ -112,26 +115,139 @@ func TestStateProcessor_ApplyTransactions(t *testing.T) {
 		Difficulty:  big.NewInt(1),
 		TxRoot:      types.EmptyRootHash,
 		ReceiptRoot: types.EmptyRootHash,
-		GasLimit:    GenesisGasLimit,
-		Time:        big.NewInt(time.Now().Unix()),
+		//GasLimit:    GenesisGasLimit,
+		GasLimit: 47123880000,
+		Time:     big.NewInt(time.Now().Unix()),
 	}
 
 	start := time.Now()
-	executedTxs, receipts, err := processor.ApplyTransactions(txMaps, txcount, header, statedb2)
+	executedTxs, _, err := processor.ApplyTransactions(txMaps, txcount, header, statedb2)
 	if err != nil {
 		return
 	}
 	end := time.Now()
 	fmt.Printf("#####ApplyTransactions[%d/%d] cost %v\n", executedTxs.Len(), txcount, end.Sub(start))
 
-	for i, tx := range executedTxs {
-		fmt.Printf("#####tx[%d]: %s, cost: %d, GasUsed: %d, CumulativeGasUsed: %d\n", i, tx.Hash().String(), receipts[i].GasUsed, receipts[i].GasUsed, receipts[i].CumulativeGasUsed)
-	}
+	//for i, tx := range executedTxs {
+	//	fmt.Printf("#####tx[%d]: %s, cost: %d, GasUsed: %d, CumulativeGasUsed: %d\n", i, tx.Hash().String(), receipts[i].GasUsed, receipts[i].GasUsed, receipts[i].CumulativeGasUsed)
+	//}
 
 	obj := statedb2.GetOrNewStateObject(addr)
 	fmt.Printf("%s:{nonce: %d, balance: %d}\n", obj.Address().String(), obj.Nonce(), obj.Balance())
 
 	fmt.Printf("to: %d\nminer: %d\n", statedb2.GetBalance(to), statedb2.GetBalance(miner))
+
+}
+
+func TestStateProcessor_ApplyTransactions(t *testing.T) {
+	t.Parallel()
+
+	db := memdb.New()
+	statedb, err := state.New(common.Hash{}, state.NewDatabase(db))
+	if err != nil {
+		t.Errorf("new state db failed. error: %v", err)
+		return
+	}
+
+	chainConfig := params.TestChainConfig
+
+	sender := 3
+	to := 3
+	perCount := 5000
+
+	senders, txMaps, count := genTxsMap_Transfer(sender, to, perCount, chainConfig.ChainID)
+	for _, sender := range senders {
+		statedb.SetBalance(sender, new(big.Int).SetUint64(2e18))
+	}
+
+	sender2, txMaps2, count2 := genTxsMap_Transfer(sender, to, perCount, chainConfig.ChainID)
+	for _, sender := range sender2 {
+		statedb.SetBalance(sender, new(big.Int).SetUint64(2e18))
+	}
+	statedb.Commit(false)
+
+	statedb2 := statedb.Copy()
+
+	miner := common.HexToAddress("0x1e3d31aa1a7d72ac206bec98666a75968281655f")
+
+	processor := NewStateProcessor(chainConfig, nil)
+	fastProcessor := NewStateParallelProcessor(chainConfig, nil)
+
+	fmt.Println("--------------------fast processor--------------")
+	applyTxs(fastProcessor, txMaps, count, statedb2, miner)
+	fmt.Println("--------------------end fast processor--------------")
+
+	fmt.Println("--------------------processor-------------------")
+	applyTxs(processor, txMaps2, count2, statedb2, miner)
+	fmt.Println("--------------------end processor--------------")
+
+}
+
+func genTxsMap_Transfer(sender, to, perCount int, ChainID *big.Int) ([]common.Address, map[common.Address]types.Transactions, int) {
+
+	txMaps := map[common.Address]types.Transactions{}
+	count := 0
+
+	senders := make([]common.Address, sender)
+	tos := make([]common.Address, to)
+
+	for i := 0; i < to; i++ {
+		key, _ := crypto.GenerateKey()
+		tos[i] = crypto.PubkeyToAddress(key.PublicKey)
+		fmt.Printf("to[%d]: %s\n", i, tos[i].String())
+	}
+
+	for i := 0; i < sender; i++ {
+		key, _ := crypto.GenerateKey()
+		senders[i] = crypto.PubkeyToAddress(key.PublicKey)
+		fmt.Printf("sender[%d]: %s\n", i, senders[i].String())
+
+		receiver := common.Address{}
+		if i < to {
+			receiver = tos[i]
+		} else {
+			r := rand.Int()
+			receiver = tos[r%to]
+		}
+		txs := make(types.Transactions, perCount)
+		for j := 0; j < len(txs); j++ {
+			txs[j] = transaction(uint64(j), receiver, 200000, ChainID, key)
+			//fmt.Printf("tx hash: %s\n", txs[j].Hash().String())
+		}
+		count += perCount
+		txMaps[senders[i]] = txs
+	}
+
+	return senders, txMaps, count
+}
+
+func applyTxs(processor Processor, txMaps map[common.Address]types.Transactions, count int, statedb *state.StateDB, miner common.Address) {
+
+	header := &types.Header{
+		Miner:       miner,
+		Number:      big.NewInt(int64(0)),
+		ParentHash:  common.Hash{},
+		Difficulty:  big.NewInt(1),
+		TxRoot:      types.EmptyRootHash,
+		ReceiptRoot: types.EmptyRootHash,
+		//GasLimit:    GenesisGasLimit,
+		GasLimit: 47123880000,
+		Time:     big.NewInt(time.Now().Unix()),
+	}
+
+	start := time.Now()
+	executedTxs, _, err := processor.ApplyTransactions(txMaps, count, header, statedb)
+	if err != nil {
+		return
+	}
+	end := time.Now()
+	fmt.Printf("#####ApplyTransactions[%d/%d] cost %v\n", executedTxs.Len(), count, end.Sub(start))
+
+	//for i, tx := range executedTxs {
+	//	fmt.Printf("#####tx[%d]: %s, cost: %d, GasUsed: %d, CumulativeGasUsed: %d\n", i, tx.Hash().String(), receipts[i].GasUsed, receipts[i].GasUsed, receipts[i].CumulativeGasUsed)
+	//}
+
+	fmt.Printf("miner: %d\n", statedb.GetBalance(miner))
 
 }
 
@@ -160,5 +276,34 @@ func TestStateProcessor_test(t *testing.T) {
 	fmt.Printf("pending len %d\n", len(pending))
 	pending["123"] = []int{1, 2, 3}
 	fmt.Printf("pending len %d\n", len(pending))
+
+	b := common.FromHex("0x1e3d31aa1a7d72ac206bec98666a75968281655f")
+	fmt.Println(b)
+
+	from := common.HexToAddress("0xd67487d6b9aec47bb15bcefd0f606d14c642af3e")
+	to := common.HexToAddress("0xd67487d6b9aec47bb15bcefd0f606d14c642af3e")
+	miner := common.HexToAddress("0x1e3d31aa1a7d72ac206bec98666a75968281655f")
+	to2 := new(common.Address)
+	to2.SetBytes(b)
+
+	if from == to {
+		fmt.Println("from == to")
+	}
+
+	if to2 == nil {
+		fmt.Println("to2 == nil")
+	}
+
+	if *to2 == miner {
+		fmt.Println("*to2 == miner")
+	}
+
+	if to2 == &miner {
+		fmt.Println("to2 == &miner")
+	}
+
+	if from != miner && (to2 == nil || to != miner) {
+		fmt.Println("true")
+	}
 
 }

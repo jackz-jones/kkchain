@@ -474,7 +474,6 @@ func (self *StateDB) Copy() *StateDB {
 	return state
 }
 
-
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
 func (self *StateDB) CopyWithStateObjects() *StateDB {
@@ -556,7 +555,15 @@ func (self *StateDB) Merge(children *StateDB, excepts map[common.Address]struct{
 	//merge write state
 	for addr := range children.stateObjectsDirty {
 		self.stateObjectsDirty[addr] = struct{}{}
-		self.stateObjects[addr] = children.stateObjects[addr].deepCopy(self)
+		_, except := excepts[addr]
+		//if except account, add
+		if _, exist := self.stateObjects[addr]; exist && except {
+			balance := children.stateObjects[addr].data.Balance
+			pre := self.stateObjects[addr].data.Balance
+			self.stateObjects[addr].setBalance(new(big.Int).Add(pre, balance))
+		} else {
+			self.stateObjects[addr] = children.stateObjects[addr].deepCopy(self)
+		}
 	}
 
 	for addr, object := range children.stateObjects {
