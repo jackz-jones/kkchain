@@ -264,7 +264,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 
 			defer pend.Done()
 
-			txState := statedb.Copy()
+			txState := statedb.CopyAndReset()
 			usedGas := new(uint64)
 
 			lock.Lock()

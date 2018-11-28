@@ -474,6 +474,13 @@ func (self *StateDB) Copy() *StateDB {
 	return state
 }
 
+func (self *StateDB) CopyAndReset() *StateDB {
+
+	state := self.Copy()
+	state.Reset(state.IntermediateRoot(false))
+	return state
+}
+
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
 func (self *StateDB) CopyWithStateObjects() *StateDB {

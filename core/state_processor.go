@@ -94,15 +94,15 @@ func (p *StateProcessor) ApplyTransactions(txMaps map[common.Address]types.Trans
 		switch err {
 		case ErrGasLimitReached:
 			// Pop the current out-of-gas transaction without shifting in the next from the account
-			log.Warningf("Gas limit exceeded for current block", "sender", from)
+			log.Warningf("Gas limit exceeded for current block", "sender", from.String())
 			statedb.RevertToSnapshot(snap)
 		case ErrNonceTooLow:
 			// New head notification data race between the transaction pool and miner, shift
-			log.Warningf("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			log.Warningf("Skipping transaction with low nonce", "sender", from.String(), "nonce", tx.Nonce())
 			statedb.RevertToSnapshot(snap)
 		case ErrNonceTooHigh:
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Warningf("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			log.Warningf("Skipping account with hight nonce", "sender", from.String(), "nonce", tx.Nonce())
 			statedb.RevertToSnapshot(snap)
 
 		case nil:

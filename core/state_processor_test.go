@@ -14,6 +14,7 @@ import (
 	"github.com/invin/kkchain/crypto"
 	"github.com/invin/kkchain/params"
 	"github.com/invin/kkchain/storage/memdb"
+	"github.com/sirupsen/logrus"
 )
 
 func transaction(nonce uint64, to common.Address, gaslimit uint64, chainId *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
@@ -151,18 +152,21 @@ func TestStateProcessor_ApplyTransactions(t *testing.T) {
 
 	chainConfig := params.TestChainConfig
 
+	initBalance := 2e18
+
+	//change this setting
 	sender := 3
-	to := 3
+	to := 2
 	perCount := 5000
 
-	senders, txMaps, count := genTxsMap_Transfer(sender, to, perCount, chainConfig.ChainID)
+	senders, _, txMaps, count := genTxsMap_Transfer(sender, to, perCount, chainConfig.ChainID)
 	for _, sender := range senders {
-		statedb.SetBalance(sender, new(big.Int).SetUint64(2e18))
+		statedb.SetBalance(sender, new(big.Int).SetUint64(uint64(initBalance)))
 	}
 
-	sender2, txMaps2, count2 := genTxsMap_Transfer(sender, to, perCount, chainConfig.ChainID)
-	for _, sender := range sender2 {
-		statedb.SetBalance(sender, new(big.Int).SetUint64(2e18))
+	senders2, _, txMaps2, count2 := genTxsMap_Transfer(sender, to, perCount, chainConfig.ChainID)
+	for _, sender := range senders2 {
+		statedb.SetBalance(sender, new(big.Int).SetUint64(uint64(initBalance)))
 	}
 	statedb.Commit(false)
 
@@ -174,16 +178,54 @@ func TestStateProcessor_ApplyTransactions(t *testing.T) {
 	fastProcessor := NewStateParallelProcessor(chainConfig, nil)
 
 	fmt.Println("--------------------fast processor--------------")
-	applyTxs(fastProcessor, txMaps, count, statedb2, miner)
+	executedTxs, receipts, gas, err := applyTxs(fastProcessor, txMaps, count, statedb2, miner)
+	if err != nil {
+		t.Errorf("fast process failed, err: %v\n", err)
+	}
 	fmt.Println("--------------------end fast processor--------------")
 
 	fmt.Println("--------------------processor-------------------")
-	applyTxs(processor, txMaps2, count2, statedb2, miner)
+	executedTxs2, receipts2, gas2, err := applyTxs(processor, txMaps2, count2, statedb2, miner)
+	if err != nil {
+		t.Errorf("process failed, err: %v\n", err)
+	}
 	fmt.Println("--------------------end processor--------------")
+
+	//verify
+	gasUsed := uint64(0)
+	fmt.Println("--------------------verify fast processor--------------")
+	result, gasUsed1 := verifyResult(executedTxs, receipts, statedb2, chainConfig.ChainID, uint64(initBalance))
+	if !result {
+		t.Error("verify fast procssor failed")
+	}
+	fmt.Printf("gas used: %d\n", gasUsed1)
+	if gas != gasUsed1 {
+		t.Errorf("gas used error. header: %d, total gas: %d\n", gas, gasUsed1)
+	}
+	fmt.Println("--------------------end verify fast processor--------------")
+
+	gasUsed += gasUsed1
+
+	fmt.Println("--------------------verify processor--------------")
+	result2, gasUsed2 := verifyResult(executedTxs2, receipts2, statedb2, chainConfig.ChainID, uint64(initBalance))
+	if !result2 {
+		t.Error("verify procssor failed")
+	}
+	fmt.Printf("gas used: %d\n", gasUsed2)
+	if gas2 != gasUsed2 {
+		t.Errorf("gas used error. header: %d, total gas: %d\n", gas2, gasUsed2)
+	}
+	fmt.Println("--------------------end verify processor--------------")
+	gasUsed += gasUsed2
+
+	minerBalance := statedb2.GetBalance(miner).Uint64()
+	if gasUsed != minerBalance {
+		t.Errorf("miner: %s, balacne: %d, require: %d\n", miner.String(), minerBalance, gasUsed)
+	}
 
 }
 
-func genTxsMap_Transfer(sender, to, perCount int, ChainID *big.Int) ([]common.Address, map[common.Address]types.Transactions, int) {
+func genTxsMap_Transfer(sender, to, perCount int, ChainID *big.Int) ([]common.Address, []common.Address, map[common.Address]types.Transactions, int) {
 
 	txMaps := map[common.Address]types.Transactions{}
 	count := 0
@@ -197,6 +239,7 @@ func genTxsMap_Transfer(sender, to, perCount int, ChainID *big.Int) ([]common.Ad
 		fmt.Printf("to[%d]: %s\n", i, tos[i].String())
 	}
 
+	var retTos []common.Address
 	for i := 0; i < sender; i++ {
 		key, _ := crypto.GenerateKey()
 		senders[i] = crypto.PubkeyToAddress(key.PublicKey)
@@ -205,12 +248,14 @@ func genTxsMap_Transfer(sender, to, perCount int, ChainID *big.Int) ([]common.Ad
 		receiver := common.Address{}
 		if i < to {
 			receiver = tos[i]
+
 		} else {
 			r := rand.Int()
 			receiver = tos[r%to]
 		}
+		retTos = append(retTos, receiver)
 		txs := make(types.Transactions, perCount)
-		for j := 0; j < len(txs); j++ {
+		for j := 0; j < perCount; j++ {
 			txs[j] = transaction(uint64(j), receiver, 200000, ChainID, key)
 			//fmt.Printf("tx hash: %s\n", txs[j].Hash().String())
 		}
@@ -218,10 +263,10 @@ func genTxsMap_Transfer(sender, to, perCount int, ChainID *big.Int) ([]common.Ad
 		txMaps[senders[i]] = txs
 	}
 
-	return senders, txMaps, count
+	return senders, retTos, txMaps, count
 }
 
-func applyTxs(processor Processor, txMaps map[common.Address]types.Transactions, count int, statedb *state.StateDB, miner common.Address) {
+func applyTxs(processor Processor, txMaps map[common.Address]types.Transactions, count int, statedb *state.StateDB, miner common.Address) (types.Transactions, types.Receipts, uint64, error) {
 
 	header := &types.Header{
 		Miner:       miner,
@@ -236,9 +281,9 @@ func applyTxs(processor Processor, txMaps map[common.Address]types.Transactions,
 	}
 
 	start := time.Now()
-	executedTxs, _, err := processor.ApplyTransactions(txMaps, count, header, statedb)
+	executedTxs, receipts, err := processor.ApplyTransactions(txMaps, count, header, statedb)
 	if err != nil {
-		return
+		return nil, nil, 0, err
 	}
 	end := time.Now()
 	fmt.Printf("#####ApplyTransactions[%d/%d] cost %v\n", executedTxs.Len(), count, end.Sub(start))
@@ -247,63 +292,58 @@ func applyTxs(processor Processor, txMaps map[common.Address]types.Transactions,
 	//	fmt.Printf("#####tx[%d]: %s, cost: %d, GasUsed: %d, CumulativeGasUsed: %d\n", i, tx.Hash().String(), receipts[i].GasUsed, receipts[i].GasUsed, receipts[i].CumulativeGasUsed)
 	//}
 
-	fmt.Printf("miner: %d\n", statedb.GetBalance(miner))
+	receiptMap := make(map[common.Hash]types.Receipt)
+	for i, tx := range executedTxs {
+		receiptMap[tx.Hash()] = *receipts[i]
+	}
 
+	return executedTxs, receipts, header.GasUsed, err
 }
 
-func TestStateProcessor_test(t *testing.T) {
-	data := make([]int, 10, 20)
-	data[0] = 1
-	data[1] = 2
-	dataappend := make([]int, 10, 20) //len <=10 则     result[0] = 99 会 影响源Slice
-	dataappend[0] = 1
-	dataappend[1] = 2
-	result := append(data, dataappend...)
-	fmt.Println("result length:", len(result), "cap:", cap(result), ":", result)
-	fmt.Printf("result %p\n", result)
-	result = append(result, 9)
-	result[0] = 99
-	result[11] = 98
-	data[2] = 3
-	fmt.Println("data length:", len(data), "cap:", cap(data), ":", data)
-	fmt.Printf("data %p\n", data)
-	fmt.Println("result length:", len(result), "cap:", cap(result), ":", result)
-	fmt.Printf("result %p\n", result)
-	fmt.Println("dataappend length:", len(dataappend), "cap:", cap(dataappend), ":", dataappend)
-	fmt.Printf("dataappend %p\n", dataappend)
+func verifyResult(executedTxs types.Transactions, receipts types.Receipts, statedb *state.StateDB, ChainID *big.Int, initBalance uint64) (bool, uint64) {
+	result := true
 
-	pending := make(map[string][]int)
-	fmt.Printf("pending len %d\n", len(pending))
-	pending["123"] = []int{1, 2, 3}
-	fmt.Printf("pending len %d\n", len(pending))
+	senderUsedBalance := make(map[common.Address]uint64)
+	toBalance := make(map[common.Address]uint64)
+	gasUsed := uint64(0)
+	for i, tx := range executedTxs {
+		msg, _ := tx.AsMessage(types.NewInitialSigner(ChainID))
+		from := msg.From()
+		to := msg.To()
 
-	b := common.FromHex("0x1e3d31aa1a7d72ac206bec98666a75968281655f")
-	fmt.Println(b)
+		receipt := receipts[i]
 
-	from := common.HexToAddress("0xd67487d6b9aec47bb15bcefd0f606d14c642af3e")
-	to := common.HexToAddress("0xd67487d6b9aec47bb15bcefd0f606d14c642af3e")
-	miner := common.HexToAddress("0x1e3d31aa1a7d72ac206bec98666a75968281655f")
-	to2 := new(common.Address)
-	to2.SetBytes(b)
+		if used, exist := senderUsedBalance[from]; exist {
+			senderUsedBalance[from] = used + receipt.GasUsed + tx.Value().Uint64()
+		} else {
+			senderUsedBalance[from] = receipt.GasUsed + tx.Value().Uint64()
+		}
 
-	if from == to {
-		fmt.Println("from == to")
+		if balance, exist := toBalance[*to]; exist {
+			toBalance[*to] = balance + tx.Value().Uint64()
+		} else {
+			toBalance[*to] = tx.Value().Uint64()
+		}
+
+		gasUsed += receipt.GasUsed
 	}
 
-	if to2 == nil {
-		fmt.Println("to2 == nil")
+	for sender, used := range senderUsedBalance {
+		balance := statedb.GetBalance(sender).Uint64()
+		require := initBalance - used
+		if require != balance {
+			logrus.Errorf("sender: %s, balacne: %d, require: %d\n", sender.String(), balance, require)
+			result = false
+		}
 	}
 
-	if *to2 == miner {
-		fmt.Println("*to2 == miner")
+	for to, require := range toBalance {
+		balance := statedb.GetBalance(to).Uint64()
+		if require != balance {
+			logrus.Errorf("to: %s, balacne: %d, require: %d\n", to.String(), balance, require)
+			result = false
+		}
 	}
 
-	if to2 == &miner {
-		fmt.Println("to2 == &miner")
-	}
-
-	if from != miner && (to2 == nil || to != miner) {
-		fmt.Println("true")
-	}
-
+	return result, gasUsed
 }
