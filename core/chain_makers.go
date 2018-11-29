@@ -58,39 +58,6 @@ func (b *BlockGen) SetExtra(data []byte) {
 	b.header.Extra = data
 }
 
-// AddTx adds a transaction to the generated block. If no coinbase has
-// been set, the block's coinbase is set to the zero address.
-//
-// AddTx panics if the transaction cannot be executed. In addition to
-// the protocol-imposed limitations (gas limit, etc.), there are some
-// further limitations on the content of transactions that can be
-// added. Notably, contract code relying on the BLOCKHASH instruction
-// will panic during execution.
-// func (b *BlockGen) AddTx(tx *types.Transaction) {
-// 	b.AddTxWithChain(nil, tx)
-// }
-
-// AddTxWithChain adds a transaction to the generated block. If no coinbase has
-// been set, the block's coinbase is set to the zero address.
-//
-// AddTxWithChain panics if the transaction cannot be executed. In addition to
-// the protocol-imposed limitations (gas limit, etc.), there are some
-// further limitations on the content of transactions that can be
-// added. If contract code relies on the BLOCKHASH instruction,
-// the block in chain will be returned.
-// func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
-// 	if b.gasPool == nil {
-// 		b.SetCoinbase(common.Address{})
-// 	}
-// 	b.statedb.Prepare(tx.Hash(), common.Hash{}, len(b.txs))
-// 	receipt, _, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	b.txs = append(b.txs, tx)
-// 	b.receipts = append(b.receipts, receipt)
-// }
-
 // Number returns the block number of the block being generated.
 func (b *BlockGen) Number() *big.Int {
 	return new(big.Int).Set(b.header.Number)
@@ -268,10 +235,6 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		panic(err)
 	}
 	b.txs = append(b.txs, tx)
-	// fmt.Printf("---- WWWW1111----AddTxWithChain len(b.txs) :%d\n", len(b.txs))
-	// for i := 0; i < len(b.txs); i++ {
-	// 	fmt.Printf(" WWWW1111----AddTxWithChain txs %i: %#v \n", i, b.txs[i].Hash().String())
-	// }
 	b.receipts = append(b.receipts, receipt)
 }
 
@@ -298,11 +261,6 @@ func (b *BlockGen) GetTxs() []*types.Transaction {
 
 func (b *BlockGen) AddTxJust(tx *types.Transaction) {
 	b.txs = append(b.txs, tx)
-	// fmt.Printf("---- KKKK1111----AddTxJust len(b.txs) :%d\n", len(b.txs))
-	// for i := 0; i < len(b.txs); i++ {
-	// 	fmt.Printf(" KKKK1111----AddTxJust txs %i: %#v \n", i, b.txs[i].Hash().String())
-	// }
-
 }
 
 func (b *BlockGen) ExecuteTxsParallel() {
@@ -310,25 +268,11 @@ func (b *BlockGen) ExecuteTxsParallel() {
 		b.SetCoinbase(common.Address{})
 	}
 	tmpBlock := types.NewBlockWithDag(b.header, b.txs, b.receipts, b.executionDag)
-	//tmpBlock.Head = b.header
-	// parallelBlockchain, err := NewBlockChain(b.config, vm.Config{}, memdb.New(), b.engine)
-	// if err != nil {
-	// 	fmt.Printf("new parallelBlockchain  err:%v \n", err)
-	// }
-	// for _, tx := range tmpBlock.Transactions() {
-	// 	fmt.Printf("!!!tmpBlock  tx : %#v \n", tx.Hash().String())
-	// }
-	//fmt.Println("-------before process,b.header.gasUed:", b.header.GasUsed)
 	parallelProcessor := NewStateParallelProcessor(params.TestChainConfig, b.chainReader)
 	receiptsArray, _, gasUsed, err := parallelProcessor.Process(tmpBlock, b.statedb, vm.Config{})
 	b.header.GasUsed = gasUsed
 	if err != nil {
 		panic(err)
 	}
-	//fmt.Println("--------after,process,b.header.gasUed:", b.header.GasUsed)
-	// for i, receipt := range receiptsArray {
-	// 	fmt.Printf("tx:%d,receipt.logs", i, receipt.Logs)
-	// }
-
 	b.receipts = append(b.receipts, receiptsArray...)
 }

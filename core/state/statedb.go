@@ -722,44 +722,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 func (s *StateDB) MergeStateDB(inputStateDB *StateDB) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	//fmt.Printf("***********1111111***************inputStateDb version :%d,orginStateDB version: %d\n", inputStateDB.nextRevisionId, s.nextRevisionId)
-	// fmt.Printf("AAAAAA@@@@MergeStateDB inputStateDB %#v \n", inputStateDB)
-	// fmt.Printf("AAAAAA@@@@MergeStateDB inputStateDB.GetStateObjects() %#v \n", inputStateDB.GetStateObjects())
-	// fmt.Printf("AAAAAA@@@@MergeStateDB inputStateDB.stateObjectsDirty %#v \n", inputStateDB.stateObjectsDirty)
-	// fmt.Printf("AAAAAA@@@@MergeStateDB inputStateDB..journal.dirties %#v \n", inputStateDB.journal.dirties)
-	// for addr := range inputStateDB.stateObjectsDirty {
-	// 	fmt.Printf("BBBBB@@@@MergeStateDB stateObjectsDirty addr %#v \n", addr.String())
-	// }
-	//s.stateObjects = inputStateDB.stateObjects
-
-	//1.有检查stateObject的版本，不需要再检查全局版本检查是否冲突,这里仅仅作一种记录作用
-	//fmt.Printf("inputStateDB version: %d,StateDB version:%d\n", inputStateDB.nextRevisionId, s.nextRevisionId)
-	// if inputStateDB.nextRevisionId < s.nextRevisionId {
-	// 	return conflictKeyError
-	// }
-
-	// for addr, stateObject := range s.stateObjects {
-	// 	fmt.Printf("!!!!----遍历s.stateObjects  addr %#v,version %d \n", addr.String(), stateObject.GetVersion())
-	// }
 
 	for addr := range inputStateDB.stateObjectsDirty {
-		//fmt.Printf("AAAAAA@@@@MergeStateDB addr %#v ,stateObject %#v\n", addr.String(), stateObject)
-		//fmt.Printf("遍历----inputStateDB stateObjectsDirty addr: %#v \n", addr.String())
 		if s.stateObjects[addr] != nil {
-			// for key := range stateObject.cachedStorage {
-			// 	if _, ok := s.stateObjects[addr].cachedStorage[key]; !ok {
-
-			// 	}
-			// }
-			// for key, value := range stateObject.cachedStorage {
-			// 	s.stateObjects[addr].setState(key, value)
-			// }
-			//如果不使用版本号，无法区分什么时候是冲突，什么时候是正常更新，
-
-			//检查每个stateObject的版本是否有冲突
-			//checkConflictflag := true
-			//fmt.Printf("***********冲突的地址：******addr:%v,inputStateDbstateObject.version :%d,orginStateDB.stateObject.version: %d\n",
-			//	addr.String(), inputStateDB.stateObjects[addr].GetVersion(), s.stateObjects[addr].GetVersion())
 			if s.stateObjects[addr].GetVersion() > inputStateDB.stateObjects[addr].GetVersion() && !bytes.Equal(addr.Bytes(), (common.Address{}).Bytes()) {
 				return conflictKeyError
 			}
@@ -767,15 +732,11 @@ func (s *StateDB) MergeStateDB(inputStateDB *StateDB) (err error) {
 
 		s.setStateObject(inputStateDB.stateObjects[addr])
 		s.stateObjects[addr].SetVersion(s.stateObjects[addr].GetVersion() + 1)
-		//s.stateObjects[addr].SetVersion(s.stateObjects[addr].GetVersion() + 1)
-		//s.stateObjects[stateObject.Address()].CommitTrie(s.db)
-		//fmt.Printf("After setStateObject ,addr:%v,version:%d\n", addr.String(), s.stateObjects[addr].GetVersion())
 	}
 	s.journal = inputStateDB.journal
 	s.stateObjectsDirty = inputStateDB.stateObjectsDirty
 	s.Commit(true)
 	s.Snapshot()
-	//fmt.Printf("***********333333***************inputStateDb version :%d,orginStateDB version: %d\n", inputStateDB.nextRevisionId, s.nextRevisionId)
 	return nil
 }
 

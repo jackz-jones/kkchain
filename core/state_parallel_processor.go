@@ -22,7 +22,7 @@ var (
 	//problem:setup different concurrent coroutine will generate different results,
 	//        so we must the num of  coroutine by the number of transactions executed concurrently for the first time
 	// setup ParallelNum 0 means ParallelNum will be config by dispathcer
-	ParallelNum = 2
+	ParallelNum = 0
 	// VerifyExecutionTimeout 0 means unlimited
 	VerifyExecutionTimeout = 0
 	ErrInvalidDagBlock     = errors.New("block's dag is incorrect")
@@ -75,26 +75,11 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 		block:   block,
 	}
 	count := 0
-	//totalExecuteStateDb := statedb.Copy()
-	// var (
-	// 	key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	// 	key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-	// 	key3, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7b")
-	// 	key4, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7c")
-	// 	addr1   = crypto.PubkeyToAddress(key1.PublicKey)
-	// 	addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-	// 	addr3   = crypto.PubkeyToAddress(key3.PublicKey)
-	// 	addr4   = crypto.PubkeyToAddress(key4.PublicKey)
-	// )
-	// fmt.Printf("!!!!!!!!Process currentBlock num %d,hash  : %#v,stateroot: %#v \n ", p.bc.CurrentBlock().Header().Number,
-	// 	p.bc.CurrentBlock().Hash().String(), p.bc.CurrentBlock().StateRoot().String())
-	// fmt.Printf("7777!!!!Process statedb.trie.Hash() %v\n", statedb.GetTrie().Hash().String())
-	//statedb.Prepare(common.Hash{}, block.Hash(), 0)
+
 	dispatcher := dag.NewDispatcher(&block.Header().ExecutionDag, ParallelNum, int64(VerifyExecutionTimeout), context, func(node *dag.Node, context interface{}) (interface{}, error) {
 		// TODO: if system occurs, the block won't be retried any more
 		ctx := context.(*verifyCtx)
 		block := ctx.block
-		//mergeCh := ctx.mergeCh
 		lastStateDb := node.LastState()
 
 		idx := node.Index()
@@ -105,76 +90,38 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 
 		usedGasArray[idx] = new(uint64)
 
-		//log.Info("execute tx " + string(idx) + ",hash:" + tx.Hash().String())
-
-		//这一段copy消耗了太多时间，没有这段，3000条tx用时274ms，有了这段，需要3.6s还不算合并的
-		//mergeCh <- true
-		//execute tx
-		// for addr, stateObject := range statedb.GetStateObjects() {
-		// 	fmt.Printf("!!!!----4444遍历stateDb.stateObjects addr %#v,version %d \n", addr.String(), stateObject.GetVersion())
-		// }
 		var txStateDb *state.StateDB
 		if lastStateDb != nil {
 			count++
-			//fmt.Printf("!!!引用上次的stateDB :%v \n", lastStateDb)
 			txStateDb = lastStateDb.(*state.StateDB)
 		} else {
 			txStateDb = statedb.CopyWithStateObjects()
 		}
 
-		//txStateDb := statedb.Copy()
 		//add version info
 		txStateDb.SetSnapshotVersion(statedb.GetSnapshotVersion())
-		// fmt.Printf("***********55555***************txStateDb version :%d,statedb verson:%d \n", txStateDb.GetSnapshotVersion(), statedb.GetSnapshotVersion())
-		// for addr, stateObject := range txStateDb.GetStateObjects() {
-		// 	fmt.Printf("!!!!----55555遍历txStateDb.stateObjects addr %#v,version %d \n", addr.String(), stateObject.GetVersion())
-		// }
 		txStateDb.Prepare(tx.Hash(), block.Hash(), idx)
-		//statedb.Prepare(tx.Hash(), block.Hash(), idx)
-		//<-mergeCh
 
-		//fmt.Printf("^^^^^^^---Begin exectute tx:%d \n", idx)
-		//statedb.Prepare(tx.Hash(), block.Hash(), idx)
 		receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, txStateDb, header, tx, usedGasArray[idx], cfg)
-		// for addr := range txStateDb.GetStateObjectsDirty() {
-		// 	fmt.Printf("^^^^^^^---After ApplyTransaction tx:%d,txStateDb dirtyStateObject==>addr: %#v\n", idx, addr.String())
-		// }
-		// fmt.Printf("#######txStateDb add1 balance  : %#v \n ", txStateDb.GetBalance(addr1))
-		// fmt.Printf("####### txStateDb add2 balance  : %#v \n ", txStateDb.GetBalance(addr2))
-		// fmt.Printf("####### txStateDb add3 balance  : %#v \n ", txStateDb.GetBalance(addr3))
-		// fmt.Printf("####### txStateDb add4 balance  : %#v \n ", txStateDb.GetBalance(addr4))
-		//fmt.Printf("mmmmmm!!!!Process txstatedb.trie.Hash() %v\n", txStateDb.GetTrie().Hash().String())
-		//receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, stateDb, header, tx, usedGas, cfg)
+
 		if err != nil {
 			fmt.Printf("ApplyTransaction err:%#v\n", err)
 			return nil, err
 		}
 		receiptsArray[idx] = receipt
-		//fmt.Printf("#####赋值 receiptsArray[%d] txHash : %v \n", idx, receiptsArray[idx].TxHash.String())
 
-		//mergeCh <- true
-		//merge statedb
-		//fmt.Printf("!!!begin merge txstatedb.txidx: %d \n", idx)
-		//fmt.Printf("***********6666***************txStateDb version :%d\n", txStateDb.GetSnapshotVersion())
 		/*
 			利用snapshot实现版本控制
 			 第一次merge txdb的初始version为0，statedb的version为0，执行完tx后，txdb的version加1=1，遇到冲突时可以更新，更新完statedb的version为1
 			 如果有并发merge时，txdb的初始version为0，statedb的version为1，执行完tx后，txdb的version加1=1，
 			 因为txdb的version并没有大于statedb的version，所以遇到冲突时报错
 		*/
-		//merge 这段运行3000次，大约需要消耗200ms左右
 		errMerge := statedb.MergeStateDB(txStateDb)
 		if errMerge != nil {
 			fmt.Printf("MergeTxStateDB failed!err:%v\n", errMerge)
 			return nil, errMerge
 		}
-		// fmt.Printf("!!#######tx:%d,add1 balance  : %#v \n ", idx, statedb.GetBalance(addr1))
-		// fmt.Printf("!!#######tx:%d,add2 balance  : %#v \n ", idx, statedb.GetBalance(addr2))
-		// fmt.Printf("!!#######tx:%d,add3 balance  : %#v \n ", idx, statedb.GetBalance(addr3))
-		// fmt.Printf("!!#######tx:%d,add4 balance  : %#v \n ", idx, statedb.GetBalance(addr4))
-		//fmt.Printf("-------------------------------!!!Merge txstatedb success.txidx: %d \n", idx)
-		//fmt.Printf("QQQQQQQ!!!!Process statedb.trie.Hash() %v\n", statedb.GetTrie().Hash().String())
-		//<-mergeCh
+
 		return txStateDb, nil
 	})
 
@@ -185,50 +132,19 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 		return nil, nil, 0, err
 	}
 	fmt.Printf("@@@@@@@@@@@@@@@!!!总共引用上次的stateDB的次数为 %d\n", count)
-	// fmt.Printf("555555!!!!Process writeBlock num %d,hash  : %#v ,stateroot: %#v\n ", block.Header().Number, block.Hash().String(),
-	// 	block.StateRoot().String())
-	// fmt.Printf("888888!!!!Process statedb.trie.Hash() %v\n", statedb.GetTrie().Hash().String())
-	// errMerge := statedb.MergeStateDB(statedb)
-	// if errMerge != nil {
-	// 	fmt.Printf("Merge totalExcuteStateDB failed!err:%v\n", errMerge)
-	// 	return nil, nil, 0, errMerge
-	// }
-	// fmt.Printf("@@#######add1 balance  : %#v \n ", statedb.GetBalance(addr1))
-	// fmt.Printf("@@#######add2 balance  : %#v \n ", statedb.GetBalance(addr2))
-	// fmt.Printf("@@#######add3 balance  : %#v \n ", statedb.GetBalance(addr3))
-	// fmt.Printf("@@#######add4 balance  : %#v \n ", statedb.GetBalance(addr4))
-
-	// for addr := range statedb.GetJournal().GetDirtys() {
-	// 	fmt.Printf("@@#######before finalize : %#v \n ", addr.String())
-	// }
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.bc.engine.Finalize(p.bc, statedb, block)
 
-	// fmt.Printf("6666!!!!Process writeBlock num %d,hash  : %#v ,stateroot: %#v\n ", block.Header().Number, block.Hash().String(),
-	// 	block.StateRoot().String())
-
-	// fmt.Printf("------len(receiptsArray) :%d\n", len(receiptsArray))
-	// for i, receipts := range receiptsArray {
-	// 	fmt.Printf("!!!receiptsArray[%d] txHash : %#v \n", i, receipts)
-	// }
 	//merge receipts,allLogs
 	for i := 0; i < block.Txs.Len(); i++ {
-		//fmt.Printf("遍历receiptsArray[%d] txHash : %#v \n", i, receiptsArray[i].TxHash.String())
 		receipts = append(receipts, receiptsArray[i])
 		allLogs = append(allLogs, receiptsArray[i].Logs...)
 		*usedGas += *usedGasArray[i]
 	}
 
 	//设置usedGas费用
-	//fmt.Println("-----------total GasUsed %d", *usedGas)
 	block.Header().GasUsed = *usedGas
-
-	//检验receipts
-	// receiptSha := types.DeriveSha(receipts)
-	// if receiptSha != header.ReceiptRoot {
-	// 	fmt.Printf("******StateParallelProcessor ：invalid receipt root hash (remote: %x local: %x)", header.ReceiptRoot, receiptSha)
-	// }
 
 	return receipts, allLogs, *usedGas, nil
 }
