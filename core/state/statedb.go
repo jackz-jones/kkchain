@@ -731,7 +731,7 @@ func (s *StateDB) MergeStateDB(inputStateDB *StateDB) (err error) {
 		}
 		//这里s.setStateObject实际上引用的是inputState的Object（指针传递）,
 		//因此s.stateObjects[addr].SetVersion(s.stateObjects[addr].GetVersion() + 1)
-		//实际上是把inputstate的version加一了.从外部来看，s.stateObjects[addr]和inputStateDB.stateObjects[addr]是一样了
+		//实际上是把inputstate的version加一了.从外部来看，s.stateObjects[addr]和inputStateDB.stateObjects[addr]的版本号是一样的
 		s.setStateObject(inputStateDB.stateObjects[addr])
 		s.stateObjects[addr].SetVersion(s.stateObjects[addr].GetVersion() + 1)
 	}
