@@ -565,8 +565,8 @@ func (self *StateDB) IsConflict(children *StateDB, excepts map[common.Address]*b
 		//case2: parent state exist and children state also exist, if same version then no conflict, if diff version then conflict
 		object, exist := self.stateObjects[addr]
 		if exist {
-			//log.WithFields(log.Fields{"addr": addr.String(), "parent version": object.GetVersion(), "children version": childrenObject.GetVersion()}).Info("this account state is in parent")
 			if object.GetVersion() != childrenObject.GetVersion() {
+				log.WithFields(log.Fields{"addr": addr.String(), "parent version": object.GetVersion(), "children version": childrenObject.GetVersion()}).Info("this account state is in parent")
 				return true
 			}
 		}
