@@ -519,7 +519,7 @@ func (self *StateDB) CopyWithStateObjects() *StateDB {
 }
 
 //TODO: compare contract account's state in future
-func (self *StateDB) IsConflict(children *StateDB, excepts map[common.Address]struct{}) bool {
+func (self *StateDB) IsConflict2(children *StateDB, excepts map[common.Address]struct{}) bool {
 
 	//if stateObjects is empty, stateObjectsDirty is definitely empty.
 	if len(children.stateObjects) == 0 {
@@ -540,22 +540,48 @@ func (self *StateDB) IsConflict(children *StateDB, excepts map[common.Address]st
 			return true
 		}
 
-		_, wFlag = children.stateObjectsDirty[addr]
-		if _, wFlag2 := self.stateObjects[addr]; wFlag && wFlag2 {
-			log.WithFields(log.Fields{"addr": addr.String()}).Info("children updated")
-			return true
-		}
 	}
 
 	return false
 }
 
-func (self *StateDB) Merge(children *StateDB, excepts map[common.Address]struct{}) error {
+func (self *StateDB) IsConflict(children *StateDB, excepts map[common.Address]*big.Int) bool {
+
+	//if stateObjects is empty, stateObjectsDirty is definitely empty.
+	if len(children.stateObjects) == 0 {
+		return false
+	}
+
+	for addr, childrenObject := range children.stateObjects {
+
+		//case0: if except, continue
+		if excepts != nil {
+			if _, except := excepts[addr]; except {
+				continue
+			}
+		}
+
+		//case1: parent state don't exist, no conflict
+		//case2: parent state exist and children state also exist, if same version then no conflict, if diff version then conflict
+		object, exist := self.stateObjects[addr]
+		if exist {
+			//log.WithFields(log.Fields{"addr": addr.String(), "parent version": object.GetVersion(), "children version": childrenObject.GetVersion()}).Info("this account state is in parent")
+			if object.GetVersion() != childrenObject.GetVersion() {
+				return true
+			}
+		}
+
+	}
+
+	return false
+}
+
+func (self *StateDB) Merge2(children *StateDB, excepts map[common.Address]struct{}) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
 	//check if there is a conflict, if there is, then return err and dependencies
-	if self.IsConflict(children, excepts) {
+	if self.IsConflict2(children, excepts) {
 		return errors.New("conflict")
 	}
 
@@ -588,6 +614,56 @@ func (self *StateDB) Merge(children *StateDB, excepts map[common.Address]struct{
 	for hash, preimage := range self.preimages {
 		self.preimages[hash] = preimage
 	}
+	return nil
+}
+
+func (self *StateDB) Merge(children *StateDB, excepts map[common.Address]*big.Int) error {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
+	//check if there is a conflict, if there is, then return err and dependencies
+	if self.IsConflict(children, excepts) {
+		return errors.New("conflict")
+	}
+
+	for addr, childrenObject := range children.stateObjects {
+
+		//case1: if dirty, merge to parent state by add balance while it is except account
+		//case2: if dirty, merge to parent state and version + 1 while it is not except account
+		//case3: if not dirty, merge to parent state by deeply copy while parent don't have this state
+		if _, exist := children.stateObjectsDirty[addr]; exist {
+			self.stateObjectsDirty[addr] = struct{}{}
+			childrenObject.SetVersion(childrenObject.GetVersion() + 1)
+
+			object, exist := self.stateObjects[addr]
+			if base, except := excepts[addr]; except && exist {
+				added := new(big.Int).Sub(childrenObject.data.Balance, base)
+				pre := object.data.Balance
+				object.setBalance(new(big.Int).Add(pre, added))
+				//can't use children version.
+				object.SetVersion(object.GetVersion() + 1)
+			} else {
+				self.stateObjects[addr] = childrenObject.deepCopy(self)
+			}
+
+		} else {
+			if _, exist := self.stateObjects[addr]; !exist {
+				self.stateObjects[addr] = childrenObject.deepCopy(self)
+			}
+		}
+	}
+
+	for hash, logs := range self.logs {
+		self.logs[hash] = make([]*types.Log, len(logs))
+		copy(self.logs[hash], logs)
+	}
+	for hash, preimage := range self.preimages {
+		self.preimages[hash] = preimage
+	}
+
+	self.Commit(true)
+	children.Commit(true)
+
 	return nil
 }
 

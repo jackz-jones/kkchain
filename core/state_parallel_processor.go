@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 
 	"github.com/invin/kkchain/common"
@@ -18,6 +19,7 @@ import (
 //思考：为了发挥并发执行交易的优势，同时减少statedb的复制，应该就可能把tx集合分成多条很长的队列集合，
 //这样每个队列集合可以复用同一个statedb，减少statedb复制的次数
 var (
+	exexuteParallel = 10000
 	// ParallelNum num
 	//problem:setup different concurrent coroutine will generate different results,
 	//        so we must the num of  coroutine by the number of transactions executed concurrently for the first time
@@ -149,13 +151,13 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 	return receipts, allLogs, *usedGas, nil
 }
 
-func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
+func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
 
 	var executedTx types.Transactions
 	var receipts types.Receipts
 
-	parallel := ParallelNum
-	if ParallelNum > len(txMaps) {
+	parallel := exexuteParallel
+	if exexuteParallel > len(txMaps) {
 		parallel = len(txMaps)
 	}
 
@@ -233,7 +235,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 			//log.WithFields(log.Fields{"acc": acc.String(), "gasPool": gasPool, "used gas": *usedGas}).Info("gas pool")
 
 			//merge to stateDb, bypass collect conflicts and dependencies
-			err := statedb.Merge(txState, excepts)
+			err := statedb.Merge2(txState, excepts)
 			if err != nil {
 				//log.WithFields(log.Fields{"acc": acc.String(), "nonce": statedb.GetNonce(acc)}).Info("merge failed")
 				pending[acc] = accTxs
@@ -276,6 +278,162 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 		}
 	}
 
+	//log.WithFields(log.Fields{"executed_tx_count": executedTx.Len(), "gas pool": gasPool}).Info("ApplyTransactions over")
+	return executedTx, receipts, nil
+}
+
+func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
+
+	var executedTx types.Transactions
+	var receipts types.Receipts
+
+	parallel := exexuteParallel
+	if exexuteParallel > len(txMaps) {
+		parallel = len(txMaps)
+	}
+
+	parallelCh := make(chan bool, parallel)
+	gasPool := new(GasPool).AddGas(header.GasLimit)
+	lock := &sync.Mutex{}
+	var pend sync.WaitGroup
+
+	pending := make(map[common.Address]types.Transactions)
+	pendingCount := 0
+
+	//log.Info("gas pool:", gasPool)
+	dag := dag.NewDag()
+	lastTxids := make(map[common.Address]common.Hash)
+
+	for acc, txs := range txMaps {
+		parallelCh <- true
+		pend.Add(1)
+
+		go func(acc common.Address, accTxs types.Transactions) {
+			defer func() {
+				<-parallelCh
+			}()
+
+			defer pend.Done()
+
+			//start := time.Now()
+			txState := statedb.Copy()
+			//end := time.Now()
+			//log.Infof("CopyAndReset cost: %v, executedTx: %d\n", end.Sub(start), executedTx.Len())
+			usedGas := new(uint64)
+
+			excepts := make(map[common.Address]*big.Int)
+
+			// Iterate over and process the individual transactions
+			for i, tx := range accTxs {
+				from, _ := types.Sender(types.NewInitialSigner(p.config.ChainID), tx)
+				lock.Lock()
+				gp := new(GasPool).AddGas(gasPool.Gas())
+				lock.Unlock()
+
+				//log.WithFields(log.Fields{"gasPool": gasPool, "tx": tx.Hash().String(), "from": from.String()}).Info("new tx prepare to execute")
+				// If we don't have enough gas for any further transactions then we're done
+				if gp.Gas() < params.TxGas {
+					log.WithFields(log.Fields{"have": gasPool, "want": params.TxGas}).Debug("Not enough gas for further transactions")
+					break
+				}
+
+				msg, _ := tx.AsMessage(types.NewInitialSigner(p.config.ChainID))
+				if (from != header.Miner) && (msg.To() == nil || *msg.To() != header.Miner) {
+					excepts[header.Miner] = txState.GetBalance(header.Miner)
+				}
+
+				// Start executing the transaction
+				txState.Prepare(tx.Hash(), common.Hash{}, i)
+				snap := txState.Snapshot()
+				receipt, gas, err := ApplyTransaction(p.config, p.bc, &header.Miner, gp, txState, header, tx, usedGas, vm.Config{})
+				if err != nil {
+					log.WithFields(log.Fields{"tx": tx.Hash().String(), "err": err}).Info("execute failed")
+					txState.RevertToSnapshot(snap)
+					break
+				}
+				//log.WithFields(log.Fields{"tx": tx.Hash().String()}).Info("execute success")
+
+				lock.Lock()
+				//other goroutine has execute over
+				if err := gasPool.SubGas(gas); err != nil {
+					log.WithFields(log.Fields{"acc": acc.String(), "gasPool": gasPool, "used gas": *usedGas, "err": err}).Info("execute error")
+					lock.Unlock()
+					return
+				}
+
+				//log.WithFields(log.Fields{"acc": acc.String(), "gasPool": gasPool, "used gas": *usedGas}).Info("gas pool")
+
+				//start1 := time.Now()
+				//merge to stateDb, bypass collect conflicts and dependencies
+				err = statedb.Merge(txState, excepts)
+				//end1 := time.Now()
+				//log.Infof("Merge cost: %v\n", end1.Sub(start1))
+				if err != nil {
+					//log.WithFields(log.Fields{"acc": acc.String(), "nonce": statedb.GetNonce(acc), "tx": tx.Hash().String()}).Info("merge failed")
+					pending[acc] = accTxs[i:]
+					pendingCount += accTxs[i:].Len()
+					lock.Unlock()
+					return
+				}
+				//log.WithFields(log.Fields{"acc": acc.String(), "nonce": statedb.GetNonce(acc), "tx": tx.Hash().String()}).Info("merge success")
+
+				//if don't conflict, execute successful, then append to returns
+				executedTx = append(executedTx, tx)
+				receipts = append(receipts, receipt)
+				header.GasUsed += gas
+
+				lock.Unlock()
+
+				//add dag
+				txid := tx.Hash().String()
+				dag.AddNode(txid)
+				if last, exist := lastTxids[acc]; exist {
+					dag.AddEdge(last, txid)
+				}
+				lastTxids[acc] = tx.Hash()
+			}
+
+		}(acc, txs)
+	}
+
+	pend.Wait()
+
+	close(parallelCh)
+
+	//serially execute txs in pending tx map
+	log.WithFields(log.Fields{"pending": pendingCount}).Info("serially execute")
+	//for a, acctxs := range pending {
+	//	for _, tx := range acctxs {
+	//		log.WithFields(log.Fields{"from": a.String(), "tx": tx.Hash().String(), "nonce": statedb.GetNonce(a)}).Info("serially execute")
+	//	}
+	//}
+
+	if pendingCount > 0 {
+		processor := NewStateProcessor(p.config, p.bc)
+		pendingTxs, pendingReceipts, err := processor.ApplyTransactions(pending, pendingCount, header, statedb)
+		if err == nil {
+			executedTx = append(executedTx, pendingTxs...)
+			receipts = append(receipts, pendingReceipts...)
+			//add dag
+			var last string
+			for i, tx := range pendingTxs {
+				txid := tx.Hash().String()
+				dag.AddNode(txid)
+				if i == 0 {
+					for _, node := range lastTxids {
+						dag.AddEdge(txid, node)
+					}
+				} else {
+					dag.AddEdge(txid, last)
+				}
+				last = txid
+			}
+		}
+	}
+
+	header.ExecutionDag = *dag
+
+	log.WithFields(log.Fields{"len": dag.Len(), "str": dag.String()}).Info("dag")
 	//log.WithFields(log.Fields{"executed_tx_count": executedTx.Len(), "gas pool": gasPool}).Info("ApplyTransactions over")
 	return executedTx, receipts, nil
 }

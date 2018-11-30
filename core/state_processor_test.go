@@ -53,7 +53,7 @@ func genTestTxsMap(chainId *big.Int) (map[common.Address]types.Transactions, int
 	return groups, count
 }
 
-func TestStateProcessor_ApplyTransactions2(t *testing.T) {
+func TestStateProcessor_ApplyTransactions_DEBUG(t *testing.T) {
 	t.Parallel()
 
 	db := memdb.New()
@@ -65,8 +65,8 @@ func TestStateProcessor_ApplyTransactions2(t *testing.T) {
 
 	chainConfig := params.TestChainConfig
 
-	//processor := NewStateParallelProcessor(chainConfig, nil)
-	processor := NewStateProcessor(chainConfig, nil)
+	processor := NewStateParallelProcessor(chainConfig, nil)
+	//processor := NewStateProcessor(chainConfig, nil)
 
 	key, _ := crypto.GenerateKey()
 
@@ -78,9 +78,9 @@ func TestStateProcessor_ApplyTransactions2(t *testing.T) {
 
 	miner := common.HexToAddress("0x1e3d31aa1a7d72ac206bec98666a75968281655f")
 	to := common.HexToAddress("0xd67487d6b9aec47bb15bcefd0f606d14c642af3e")
-	to2 := common.HexToAddress("0x28426B47577f75ECb43a7C6076d55a513184CC54")
+	//to2 := common.HexToAddress("0x28426B47577f75ECb43a7C6076d55a513184CC54")
 
-	txcount := 100
+	txcount := 2
 	txMaps := map[common.Address]types.Transactions{}
 
 	txs := make(types.Transactions, txcount)
@@ -97,11 +97,23 @@ func TestStateProcessor_ApplyTransactions2(t *testing.T) {
 	statedb.SetBalance(addr, new(big.Int).SetUint64(2e18))
 	txs = make(types.Transactions, txcount)
 	for i := 0; i < len(txs); i++ {
-		txs[i] = transaction(uint64(i), to2, 200000, chainConfig.ChainID, key)
+		txs[i] = transaction(uint64(i), miner, 200000, chainConfig.ChainID, key)
 		fmt.Printf("tx hash: %s\n", txs[i].Hash().String())
 	}
 
 	txMaps[addr] = txs
+
+	//key, _ = crypto.GenerateKey()
+	//addr = crypto.PubkeyToAddress(key.PublicKey)
+	//fmt.Printf("address: %s\n", addr.String())
+	//statedb.SetBalance(addr, new(big.Int).SetUint64(2e18))
+	//txs = make(types.Transactions, txcount)
+	//for i := 0; i < len(txs); i++ {
+	//	txs[i] = transaction(uint64(i), miner, 200000, chainConfig.ChainID, key)
+	//	fmt.Printf("tx hash: %s\n", txs[i].Hash().String())
+	//}
+	//
+	//txMaps[addr] = txs
 
 	//txMaps, txcount := genTestTxsMap(chainConfig.ChainID)
 
@@ -155,9 +167,9 @@ func TestStateProcessor_ApplyTransactions(t *testing.T) {
 	initBalance := 2e18
 
 	//change this setting
-	sender := 3
-	to := 2
-	perCount := 5000
+	sender := 300
+	to := 300
+	perCount := 100
 
 	senders, _, txMaps, count := genTxsMap_Transfer(sender, to, perCount, chainConfig.ChainID)
 	for _, sender := range senders {
@@ -219,6 +231,7 @@ func TestStateProcessor_ApplyTransactions(t *testing.T) {
 	gasUsed += gasUsed2
 
 	minerBalance := statedb2.GetBalance(miner).Uint64()
+	t.Logf("miner: %s, balacne: %d, require: %d\n", miner.String(), minerBalance, gasUsed)
 	if gasUsed != minerBalance {
 		t.Errorf("miner: %s, balacne: %d, require: %d\n", miner.String(), minerBalance, gasUsed)
 	}
@@ -236,14 +249,14 @@ func genTxsMap_Transfer(sender, to, perCount int, ChainID *big.Int) ([]common.Ad
 	for i := 0; i < to; i++ {
 		key, _ := crypto.GenerateKey()
 		tos[i] = crypto.PubkeyToAddress(key.PublicKey)
-		fmt.Printf("to[%d]: %s\n", i, tos[i].String())
+		//fmt.Printf("to[%d]: %s\n", i, tos[i].String())
 	}
 
 	var retTos []common.Address
 	for i := 0; i < sender; i++ {
 		key, _ := crypto.GenerateKey()
 		senders[i] = crypto.PubkeyToAddress(key.PublicKey)
-		fmt.Printf("sender[%d]: %s\n", i, senders[i].String())
+		//fmt.Printf("sender[%d]: %s\n", i, senders[i].String())
 
 		receiver := common.Address{}
 		if i < to {
@@ -346,4 +359,11 @@ func verifyResult(executedTxs types.Transactions, receipts types.Receipts, state
 	}
 
 	return result, gasUsed
+}
+
+func Test(t *testing.T) {
+	a := []int{1, 2, 3, 4, 5, 6, 7}
+	fmt.Println(a)
+	b := a[1:]
+	fmt.Println(b)
 }
