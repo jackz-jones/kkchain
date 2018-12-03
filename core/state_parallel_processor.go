@@ -260,7 +260,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 				txid := tx.Hash()
 				dag.AddNode(txid.String())
 				if i != 0 {
-					dag.AddEdge(txid.String(), last.String())
+					dag.AddEdge(last.String(), txid.String())
 				}
 				last = txid
 			}
@@ -296,10 +296,10 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 				dag.AddNode(txid)
 				if i == 0 {
 					for _, node := range lastTxids {
-						dag.AddEdge(txid, node.String())
+						dag.AddEdge(node.String(), txid)
 					}
 				} else {
-					dag.AddEdge(txid, last)
+					dag.AddEdge(last, txid)
 				}
 				last = txid
 			}
@@ -452,10 +452,10 @@ func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]ty
 				dag.AddNode(txid)
 				if i == 0 {
 					for _, node := range lastTxids {
-						dag.AddEdge(txid, node.String())
+						dag.AddEdge(node.String(), txid)
 					}
 				} else {
-					dag.AddEdge(txid, last)
+					dag.AddEdge(last, txid)
 				}
 				last = txid
 			}
