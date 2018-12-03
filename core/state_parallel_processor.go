@@ -151,7 +151,8 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 	return receipts, allLogs, *usedGas, nil
 }
 
-func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
+//merge per account
+func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
 
 	var executedTx types.Transactions
 	var receipts types.Receipts
@@ -170,6 +171,8 @@ func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]ty
 	pendingCount := 0
 
 	//log.Info("gas pool:", gasPool)
+	dag := dag.NewDag()
+	lastTxids := make(map[common.Address]common.Hash)
 
 	for acc, txs := range txMaps {
 		parallelCh <- true
@@ -250,7 +253,17 @@ func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]ty
 			receipts = append(receipts, accReceipts...)
 			header.GasUsed += *usedGas
 
-			//TODO：add dag
+			//add dag
+			var last common.Hash
+			for i, tx := range accExecutedTx {
+				txid := tx.Hash()
+				dag.AddNode(txid.String())
+				if i != 0 {
+					dag.AddEdge(txid.String(), last.String())
+				}
+				last = txid
+			}
+			lastTxids[acc] = last
 
 			lock.Unlock()
 
@@ -275,6 +288,20 @@ func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]ty
 		if err == nil {
 			executedTx = append(executedTx, pendingTxs...)
 			receipts = append(receipts, pendingReceipts...)
+			//add dag
+			var last string
+			for i, tx := range pendingTxs {
+				txid := tx.Hash().String()
+				dag.AddNode(txid)
+				if i == 0 {
+					for _, node := range lastTxids {
+						dag.AddEdge(txid, node.String())
+					}
+				} else {
+					dag.AddEdge(txid, last)
+				}
+				last = txid
+			}
 		}
 	}
 
@@ -282,7 +309,8 @@ func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]ty
 	return executedTx, receipts, nil
 }
 
-func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
+//merge per transaction
+func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
 
 	var executedTx types.Transactions
 	var receipts types.Receipts
@@ -388,7 +416,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 				txid := tx.Hash().String()
 				dag.AddNode(txid)
 				if last, exist := lastTxids[acc]; exist {
-					dag.AddEdge(last, txid)
+					dag.AddEdge(last.String(), txid)
 				}
 				lastTxids[acc] = tx.Hash()
 			}
@@ -421,7 +449,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 				dag.AddNode(txid)
 				if i == 0 {
 					for _, node := range lastTxids {
-						dag.AddEdge(txid, node)
+						dag.AddEdge(txid, node.String())
 					}
 				} else {
 					dag.AddEdge(txid, last)
