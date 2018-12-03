@@ -255,6 +255,11 @@ func (b *BlockGen) AddExecutionDag(executionDag dag.Dag) {
 	b.executionDag = executionDag
 }
 
+//GetExecutionDag get Transaction execution diagram
+func (b *BlockGen) GetExecutionDag() dag.Dag {
+	return b.executionDag
+}
+
 func (b *BlockGen) GetTxs() []*types.Transaction {
 	return b.txs
 }
@@ -274,5 +279,24 @@ func (b *BlockGen) ExecuteTxsParallel() {
 	if err != nil {
 		panic(err)
 	}
+	b.receipts = append(b.receipts, receiptsArray...)
+}
+
+func (b *BlockGen) ExecuteTxsParallelWithoutDag(txMaps map[common.Address]types.Transactions) {
+	if b.gasPool == nil {
+		b.SetCoinbase(common.Address{})
+	}
+	tmpBlock := types.NewBlockWithDag(b.header, b.txs, b.receipts, b.executionDag)
+	parallelProcessor := NewStateParallelProcessor(params.TestChainConfig, b.chainReader)
+	//merge per transaction
+	header := tmpBlock.Header()
+	_, receiptsArray, err := parallelProcessor.ApplyTransactions(txMaps, 0, header, b.statedb)
+	fmt.Printf("!!!!!ApplyTransactions ExecutionDag %#v \n", header.ExecutionDag)
+	//merge per account
+	//_, receiptsArray, err := parallelProcessor.ApplyTransactions2(txMaps, 0, tmpBlock.Header(), b.statedb)
+	if err != nil {
+		panic(err)
+	}
+	b.executionDag = header.ExecutionDag
 	b.receipts = append(b.receipts, receiptsArray...)
 }
