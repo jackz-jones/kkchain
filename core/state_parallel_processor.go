@@ -152,7 +152,7 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 }
 
 //merge per account
-func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
+func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
 
 	var executedTx types.Transactions
 	var receipts types.Receipts
@@ -260,7 +260,7 @@ func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]ty
 				txid := tx.Hash()
 				dag.AddNode(txid.String())
 				if i != 0 {
-					dag.AddEdge(txid.String(), last)
+					dag.AddEdge(txid.String(), last.String())
 				}
 				last = txid
 			}
@@ -296,7 +296,7 @@ func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]ty
 				dag.AddNode(txid)
 				if i == 0 {
 					for _, node := range lastTxids {
-						dag.AddEdge(txid, node)
+						dag.AddEdge(txid, node.String())
 					}
 				} else {
 					dag.AddEdge(txid, last)
@@ -312,7 +312,7 @@ func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]ty
 }
 
 //merge per transaction
-func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
+func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
 
 	var executedTx types.Transactions
 	var receipts types.Receipts
@@ -416,7 +416,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 				txid := tx.Hash().String()
 				dag.AddNode(txid)
 				if last, exist := lastTxids[acc]; exist {
-					dag.AddEdge(last, txid)
+					dag.AddEdge(last.String(), txid)
 				}
 				lastTxids[acc] = tx.Hash()
 
@@ -452,7 +452,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 				dag.AddNode(txid)
 				if i == 0 {
 					for _, node := range lastTxids {
-						dag.AddEdge(txid, node)
+						dag.AddEdge(txid, node.String())
 					}
 				} else {
 					dag.AddEdge(txid, last)
