@@ -291,7 +291,7 @@ func (b *BlockGen) ExecuteTxsParallelWithoutDag(txMaps map[common.Address]types.
 	//merge per transaction
 	//header := tmpBlock.Header()
 	_, receiptsArray, err := parallelProcessor.ApplyTransactions(txMaps, 0, b.header, b.statedb)
-	fmt.Printf("!!!!!ApplyTransactions ExecutionDag %#v \n", b.header.ExecutionDag)
+	//fmt.Printf("!!!!!ApplyTransactions ExecutionDag %#v \n", b.header.ExecutionDag)
 	//merge per account
 	//_, receiptsArray, err := parallelProcessor.ApplyTransactions2(txMaps, 0, tmpBlock.Header(), b.statedb)
 	if err != nil {
@@ -299,8 +299,8 @@ func (b *BlockGen) ExecuteTxsParallelWithoutDag(txMaps map[common.Address]types.
 	}
 	b.executionDag = b.header.ExecutionDag
 	b.receipts = append(b.receipts, receiptsArray...)
-	for i, receipt := range receiptsArray {
-		fmt.Printf("!!!!!11111------receipt[%d]: %#v,%#v,%#v, \n", i, receipt.TxHash.String(), receipt.GasUsed, receipt.CumulativeGasUsed)
-	}
-	fmt.Printf("!!!!!11111------b.receipts %#v \n", b.receipts)
+	// for i, receipt := range receiptsArray {
+	// 	fmt.Printf("!!!!!11111------receipt[%d]: %#v,%#v,%#v, \n", i, receipt.TxHash.String(), receipt.GasUsed, receipt.CumulativeGasUsed)
+	// }
+	// fmt.Printf("!!!!!11111------b.receipts %#v \n", b.receipts)
 }

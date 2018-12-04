@@ -377,8 +377,8 @@ func TestTxsSequenceExecutePerformance(t *testing.T) {
 			}
 			txMaps[addr7] = txArray2
 			gen.ExecuteTxsParallelWithoutDag(txMaps)
-			dag := gen.GetExecutionDag()
-			fmt.Println("!!!!!ExecutionDag:" + dag.String() + "\n")
+			//dag := gen.GetExecutionDag()
+			//fmt.Println("!!!!!ExecutionDag:" + dag.String() + "\n")
 			/********创建合约再调用******************************************/
 			// createContractTxNew, err := types.SignTx(types.NewContractCreation(gen.TxNonce(addr4), big.NewInt(0), initcreateContractGas+storageContranctDataGasNew, new(big.Int).SetInt64(1), codeByteDataNew), signer, key4)
 			// if err != nil {

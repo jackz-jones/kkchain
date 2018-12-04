@@ -147,12 +147,12 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 
 	//merge receipts,allLogs
 	for i := 0; i < block.Txs.Len(); i++ {
-		fmt.Printf("22222222------append receipt[%d]: %#v,%#v,%#v\n", i, receiptsArray[i].TxHash.String(), receiptsArray[i].GasUsed, receiptsArray[i].CumulativeGasUsed)
+		//fmt.Printf("22222222------append receipt[%d]: %#v,%#v,%#v\n", i, receiptsArray[i].TxHash.String(), receiptsArray[i].GasUsed, receiptsArray[i].CumulativeGasUsed)
 		receipts = append(receipts, receiptsArray[i])
 		allLogs = append(allLogs, receiptsArray[i].Logs...)
 		*usedGas += *usedGasArray[i]
 	}
-	fmt.Printf("22222222------sProcess receipts %#v \n", receipts)
+	//fmt.Printf("22222222------sProcess receipts %#v \n", receipts)
 
 	//设置usedGas费用
 	block.Header().GasUsed = *usedGas
@@ -262,7 +262,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 			executedTx = append(executedTx, accExecutedTx...)
 			receipts = append(receipts, accReceipts...)
 			header.GasUsed += *usedGas
-			fmt.Printf("**********header.GasUsed:%d\n", header.GasUsed)
+			//fmt.Printf("**********header.GasUsed:%d\n", header.GasUsed)
 
 			//add dag
 			var last common.Hash
