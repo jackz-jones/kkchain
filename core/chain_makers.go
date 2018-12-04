@@ -286,17 +286,21 @@ func (b *BlockGen) ExecuteTxsParallelWithoutDag(txMaps map[common.Address]types.
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
-	tmpBlock := types.NewBlockWithDag(b.header, b.txs, b.receipts, b.executionDag)
+	//tmpBlock := types.NewBlockWithDag(b.header, b.txs, b.receipts, b.executionDag)
 	parallelProcessor := NewStateParallelProcessor(params.TestChainConfig, b.chainReader)
 	//merge per transaction
-	header := tmpBlock.Header()
-	_, receiptsArray, err := parallelProcessor.ApplyTransactions(txMaps, 0, header, b.statedb)
-	fmt.Printf("!!!!!ApplyTransactions ExecutionDag %#v \n", header.ExecutionDag)
+	//header := tmpBlock.Header()
+	_, receiptsArray, err := parallelProcessor.ApplyTransactions(txMaps, 0, b.header, b.statedb)
+	fmt.Printf("!!!!!ApplyTransactions ExecutionDag %#v \n", b.header.ExecutionDag)
 	//merge per account
 	//_, receiptsArray, err := parallelProcessor.ApplyTransactions2(txMaps, 0, tmpBlock.Header(), b.statedb)
 	if err != nil {
 		panic(err)
 	}
-	b.executionDag = header.ExecutionDag
+	b.executionDag = b.header.ExecutionDag
 	b.receipts = append(b.receipts, receiptsArray...)
+	for i, receipt := range receiptsArray {
+		fmt.Printf("!!!!!11111------receipt[%d]: %#v,%#v,%#v, \n", i, receipt.TxHash.String(), receipt.GasUsed, receipt.CumulativeGasUsed)
+	}
+	fmt.Printf("!!!!!11111------b.receipts %#v \n", b.receipts)
 }

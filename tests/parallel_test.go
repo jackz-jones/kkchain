@@ -200,7 +200,7 @@ var (
 
 	signer = types.NewInitialSigner(new(big.Int).SetInt64(1))
 
-	number = 10
+	number = 4
 	//3000*3=9000千条交易，并发执行采用copy的方式，需要占用5GB左右内存。必须缩减这个占用的内存才行。
 	//考虑以什么方式可以减少copy的次数
 )

@@ -104,7 +104,7 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 		txStateDb.SetSnapshotVersion(statedb.GetSnapshotVersion())
 		txStateDb.Prepare(tx.Hash(), block.Hash(), idx)
 
-		receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, txStateDb, header, tx, usedGasArray[idx], cfg)
+		receipt, _, err := ApplyTransaction(p.config, p.bc, &header.Miner, gp, txStateDb, header, tx, usedGasArray[idx], cfg)
 
 		if err != nil {
 			fmt.Printf("ApplyTransaction err:%#v\n", err)
@@ -118,7 +118,14 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 			 如果有并发merge时，txdb的初始version为0，statedb的version为1，执行完tx后，txdb的version加1=1，
 			 因为txdb的version并没有大于statedb的version，所以遇到冲突时报错
 		*/
-		errMerge := statedb.MergeStateDB(txStateDb)
+		//errMerge := statedb.MergeStateDB(txStateDb)
+		excepts := make(map[common.Address]*big.Int)
+		from, _ := types.Sender(types.NewInitialSigner(p.config.ChainID), tx)
+		msg, _ := tx.AsMessage(types.NewInitialSigner(p.config.ChainID))
+		if (from != header.Miner) && (msg.To() == nil || *msg.To() != header.Miner) {
+			excepts[header.Miner] = txStateDb.GetBalance(header.Miner)
+		}
+		errMerge := statedb.Merge(txStateDb, excepts)
 		if errMerge != nil {
 			fmt.Printf("MergeTxStateDB failed!err:%v\n", errMerge)
 			return nil, errMerge
@@ -140,10 +147,12 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 
 	//merge receipts,allLogs
 	for i := 0; i < block.Txs.Len(); i++ {
+		fmt.Printf("22222222------append receipt[%d]: %#v,%#v,%#v\n", i, receiptsArray[i].TxHash.String(), receiptsArray[i].GasUsed, receiptsArray[i].CumulativeGasUsed)
 		receipts = append(receipts, receiptsArray[i])
 		allLogs = append(allLogs, receiptsArray[i].Logs...)
 		*usedGas += *usedGasArray[i]
 	}
+	fmt.Printf("22222222------sProcess receipts %#v \n", receipts)
 
 	//设置usedGas费用
 	block.Header().GasUsed = *usedGas
@@ -185,7 +194,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 
 			defer pend.Done()
 
-			txState := statedb.CopyAndReset()
+			txState := statedb.Copy()
 			usedGas := new(uint64)
 
 			lock.Lock()
@@ -195,7 +204,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 			var accExecutedTx types.Transactions
 			var accReceipts types.Receipts
 
-			excepts := make(map[common.Address]struct{})
+			excepts := make(map[common.Address]*big.Int)
 
 			// Iterate over and process the individual transactions
 			for i, tx := range accTxs {
@@ -210,21 +219,22 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 				// Start executing the transaction
 				txState.Prepare(tx.Hash(), common.Hash{}, i)
 				snap := txState.Snapshot()
-				receipt, _, err := ApplyTransaction(p.config, p.bc, &header.Miner, gp, txState, header, tx, usedGas, vm.Config{})
+				receipt, gas, err := ApplyTransaction(p.config, p.bc, &header.Miner, gp, txState, header, tx, usedGas, vm.Config{})
 				if err != nil {
 					log.WithFields(log.Fields{"tx": tx.Hash().String(), "err": err}).Info("execute failed")
 					txState.RevertToSnapshot(snap)
 					break
 				}
 				//log.WithFields(log.Fields{"tx": tx.Hash().String()}).Info("execute success")
-
+				receipt.CumulativeGasUsed = gas
 				accExecutedTx = append(accExecutedTx, tx)
 				accReceipts = append(accReceipts, receipt)
 
 				msg, _ := tx.AsMessage(types.NewInitialSigner(p.config.ChainID))
 				if (from != header.Miner) && (msg.To() == nil || *msg.To() != header.Miner) {
-					excepts[header.Miner] = struct{}{}
+					excepts[header.Miner] = txState.GetBalance(header.Miner)
 				}
+
 			}
 
 			lock.Lock()
@@ -238,9 +248,9 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 			//log.WithFields(log.Fields{"acc": acc.String(), "gasPool": gasPool, "used gas": *usedGas}).Info("gas pool")
 
 			//merge to stateDb, bypass collect conflicts and dependencies
-			err := statedb.Merge2(txState, excepts)
+			err := statedb.Merge(txState, excepts)
 			if err != nil {
-				//log.WithFields(log.Fields{"acc": acc.String(), "nonce": statedb.GetNonce(acc)}).Info("merge failed")
+				log.WithFields(log.Fields{"acc": acc.String(), "nonce": statedb.GetNonce(acc)}).Info("merge failed")
 				pending[acc] = accTxs
 				pendingCount += accTxs.Len()
 				lock.Unlock()
@@ -252,6 +262,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 			executedTx = append(executedTx, accExecutedTx...)
 			receipts = append(receipts, accReceipts...)
 			header.GasUsed += *usedGas
+			fmt.Printf("**********header.GasUsed:%d\n", header.GasUsed)
 
 			//add dag
 			var last common.Hash
@@ -305,6 +316,7 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 		}
 	}
 
+	header.ExecutionDag = *dag
 	//log.WithFields(log.Fields{"executed_tx_count": executedTx.Len(), "gas pool": gasPool}).Info("ApplyTransactions over")
 	return executedTx, receipts, nil
 }
@@ -409,8 +421,7 @@ func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]ty
 				executedTx = append(executedTx, tx)
 				receipts = append(receipts, receipt)
 				header.GasUsed += gas
-
-				lock.Unlock()
+				fmt.Printf("header.GasUsed:%d\n", header.GasUsed)
 
 				//add dag
 				txid := tx.Hash().String()
@@ -419,6 +430,9 @@ func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]ty
 					dag.AddEdge(last.String(), txid)
 				}
 				lastTxids[acc] = tx.Hash()
+
+				lock.Unlock()
+
 			}
 
 		}(acc, txs)
@@ -460,8 +474,6 @@ func (p *StateParallelProcessor) ApplyTransactions2(txMaps map[common.Address]ty
 	}
 
 	header.ExecutionDag = *dag
-
-	log.WithFields(log.Fields{"len": dag.Len(), "str": dag.String()}).Info("dag")
 	//log.WithFields(log.Fields{"executed_tx_count": executedTx.Len(), "gas pool": gasPool}).Info("ApplyTransactions over")
 	return executedTx, receipts, nil
 }
