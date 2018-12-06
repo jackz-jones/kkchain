@@ -16,7 +16,7 @@ type Callback func(*Node, interface{}) (interface{}, error)
 
 // Task struct
 type Task struct {
-	dependence int
+	dependence uint64
 	node       *Node
 }
 
@@ -29,7 +29,7 @@ var (
 
 // Dispatcher struct a message dispatcher dag.
 type Dispatcher struct {
-	concurrency      int
+	concurrency      uint64
 	cb               Callback
 	muTask           sync.Mutex
 	dag              *Dag
@@ -37,15 +37,15 @@ type Dispatcher struct {
 	quitCh           chan bool
 	queueCh          chan *Node
 	tasks            map[interface{}]*Task
-	queueCounter     int
-	completedCounter int
+	queueCounter     uint64
+	completedCounter uint64
 	isFinsih         bool
 	finishCH         chan bool
 	context          interface{}
 }
 
 // NewDispatcher create Dag Dispatcher instance.
-func NewDispatcher(dag *Dag, concurrency int, elapseInMs int64, context interface{}, cb Callback) *Dispatcher {
+func NewDispatcher(dag *Dag, concurrency uint64, elapseInMs int64, context interface{}, cb Callback) *Dispatcher {
 	dp := &Dispatcher{
 		concurrency:      concurrency,
 		elapseInMs:       elapseInMs,
@@ -72,11 +72,11 @@ func (dp *Dispatcher) Run() error {
 	rootCounter := 0
 	for _, node := range vertices {
 		task := &Task{
-			dependence: node.parentCounter,
+			dependence: node.ParentCounter,
 			node:       node,
 		}
-		task.dependence = node.parentCounter
-		dp.tasks[node.key] = task
+		task.dependence = node.ParentCounter
+		dp.tasks[node.Key] = task
 
 		if task.dependence == 0 {
 			rootCounter++
@@ -90,9 +90,9 @@ func (dp *Dispatcher) Run() error {
 
 	//fix bug:setup different concurrent coroutine will generate different results
 	if dp.concurrency == 0 {
-		dp.concurrency = rootCounter
-		if dp.concurrency > MaxConcurrentRoutine {
-			dp.concurrency = MaxConcurrentRoutine
+		dp.concurrency = uint64(rootCounter)
+		if dp.concurrency > uint64(MaxConcurrentRoutine) {
+			dp.concurrency = uint64(MaxConcurrentRoutine)
 		}
 	}
 	fmt.Printf("设置并发执行交易的协程数量为:%d\n", dp.concurrency)
@@ -115,7 +115,7 @@ func (dp *Dispatcher) execute() error {
 
 	var err error
 	go func() {
-		for i := 0; i < dp.concurrency; i++ {
+		for i := 0; uint64(i) < dp.concurrency; i++ {
 			go func() {
 				for {
 					select {
@@ -165,7 +165,7 @@ func (dp *Dispatcher) Stop() {
 	}
 	dp.isFinsih = true
 
-	for i := 0; i < dp.concurrency; i++ {
+	for i := 0; uint64(i) < dp.concurrency; i++ {
 		select {
 		case dp.quitCh <- true:
 		default:
@@ -185,7 +185,7 @@ func (dp *Dispatcher) onCompleteParentTask(node *Node, lastState interface{}) (b
 	dp.muTask.Lock()
 	defer dp.muTask.Unlock()
 
-	key := node.key
+	key := node.Key
 
 	vertices := dp.dag.GetChildrenNodes(key)
 	//只有一个依赖的情况，可以直接引用上个statedb，只有后面分叉的情况才需要再次copy多个statedb
@@ -195,7 +195,7 @@ func (dp *Dispatcher) onCompleteParentTask(node *Node, lastState interface{}) (b
 	}
 
 	for _, node := range vertices {
-		err := dp.updateDependenceTask(node.key, lastStateDb)
+		err := dp.updateDependenceTask(node.Key, lastStateDb)
 		if err != nil {
 			return false, err
 		}

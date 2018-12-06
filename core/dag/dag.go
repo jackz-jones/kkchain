@@ -10,10 +10,10 @@ import (
 
 // Node struct
 type Node struct {
-	key           interface{}
-	index         int
-	children      []*Node
-	parentCounter int
+	Key           interface{}
+	Index         uint64
+	Children      []*Node
+	ParentCounter uint64
 	lastState     interface{}
 }
 
@@ -26,21 +26,21 @@ var (
 )
 
 // NewNode new node
-func NewNode(key interface{}, index int) *Node {
+func NewNode(Key interface{}, Index uint64) *Node {
 	return &Node{
-		key:           key,
-		index:         index,
-		parentCounter: 0,
-		children:      make([]*Node, 0),
+		Key:           Key,
+		Index:         Index,
+		ParentCounter: 0,
+		Children:      make([]*Node, 0),
 	}
 }
 
-// Index return node index
-func (n *Node) Index() int {
-	return n.index
+// Index return node Index
+func (n *Node) GetIndex() uint64 {
+	return n.Index
 }
 
-// Index return node index
+// Index return node Index
 func (n *Node) LastState() interface{} {
 	return n.lastState
 }
@@ -48,8 +48,8 @@ func (n *Node) LastState() interface{} {
 // Dag struct
 type Dag struct {
 	nodes  map[interface{}]*Node
-	index  int
-	indexs map[int]interface{}
+	Index  uint64
+	indexs map[uint64]interface{}
 }
 
 // ToProto converts domain Dag into proto Dag
@@ -57,18 +57,18 @@ func (dag *Dag) ToProto() (proto.Message, error) {
 
 	nodes := make([]*dagpb.Node, len(dag.nodes))
 
-	for idx, key := range dag.indexs {
-		v, ok := dag.nodes[key]
+	for idx, Key := range dag.indexs {
+		v, ok := dag.nodes[Key]
 		if !ok {
 			return nil, ErrInvalidDagToProto
 		}
 
 		node := new(dagpb.Node)
-		node.Index = int32(v.index)
+		node.Index = int32(v.Index)
 		//node.Key = v.Key.(string)
-		node.Children = make([]int32, len(v.children))
-		for i, child := range v.children {
-			node.Children[i] = int32(child.index)
+		node.Children = make([]int32, len(v.Children))
+		for i, child := range v.Children {
+			node.Children[i] = int32(child.Index)
 		}
 
 		nodes[idx] = node
@@ -84,7 +84,7 @@ func (dag *Dag) FromProto(msg proto.Message) error {
 	if msg, ok := msg.(*dagpb.Dag); ok {
 		if msg != nil {
 			for _, v := range msg.Nodes {
-				dag.addNodeWithIndex(int(v.Index), int(v.Index))
+				dag.addNodeWithIndex(uint64(v.Index), uint64(v.Index))
 			}
 
 			for _, v := range msg.Nodes {
@@ -113,28 +113,28 @@ func (dag *Dag) String() string {
 func NewDag() *Dag {
 	return &Dag{
 		nodes:  make(map[interface{}]*Node, 0),
-		index:  0,
-		indexs: make(map[int]interface{}, 0),
+		Index:  0,
+		indexs: make(map[uint64]interface{}, 0),
 	}
 }
 
 // Len Dag len
-func (dag *Dag) Len() int {
-	return len(dag.nodes)
+func (dag *Dag) Len() uint64 {
+	return uint64(len(dag.nodes))
 }
 
-// GetNode get node by key
-func (dag *Dag) GetNode(key interface{}) *Node {
-	if v, ok := dag.nodes[key]; ok {
+// GetNode get node by Key
+func (dag *Dag) GetNode(Key interface{}) *Node {
+	if v, ok := dag.nodes[Key]; ok {
 		return v
 	}
 	return nil
 }
 
-// GetChildrenNodes get children nodes with key
-func (dag *Dag) GetChildrenNodes(key interface{}) []*Node {
-	if v, ok := dag.nodes[key]; ok {
-		return v.children
+// GetChildrenNodes get Children nodes with Key
+func (dag *Dag) GetChildrenNodes(Key interface{}) []*Node {
+	if v, ok := dag.nodes[Key]; ok {
+		return v.Children
 	}
 
 	return nil
@@ -144,7 +144,7 @@ func (dag *Dag) GetChildrenNodes(key interface{}) []*Node {
 func (dag *Dag) GetRootNodes() []*Node {
 	nodes := make([]*Node, 0)
 	for _, node := range dag.nodes {
-		if node.parentCounter == 0 {
+		if node.ParentCounter == 0 {
 			nodes = append(nodes, node)
 		}
 	}
@@ -161,26 +161,26 @@ func (dag *Dag) GetNodes() []*Node {
 }
 
 // AddNode add node
-func (dag *Dag) AddNode(key interface{}) error {
-	if _, ok := dag.nodes[key]; ok {
+func (dag *Dag) AddNode(Key interface{}) error {
+	if _, ok := dag.nodes[Key]; ok {
 		return ErrKeyIsExisted
 	}
 
-	dag.nodes[key] = NewNode(key, dag.index)
-	dag.indexs[dag.index] = key
-	dag.index++
+	dag.nodes[Key] = NewNode(Key, dag.Index)
+	dag.indexs[dag.Index] = Key
+	dag.Index++
 	return nil
 }
 
 // addNodeWithIndex add node
-func (dag *Dag) addNodeWithIndex(key interface{}, index int) error {
-	if _, ok := dag.nodes[key]; ok {
+func (dag *Dag) addNodeWithIndex(Key interface{}, Index uint64) error {
+	if _, ok := dag.nodes[Key]; ok {
 		return ErrKeyIsExisted
 	}
 
-	dag.nodes[key] = NewNode(key, index)
-	dag.indexs[index] = key
-	dag.index = index
+	dag.nodes[Key] = NewNode(Key, Index)
+	dag.indexs[Index] = Key
+	dag.Index = Index
 	return nil
 }
 
@@ -197,14 +197,14 @@ func (dag *Dag) AddEdge(fromKey, toKey interface{}) error {
 		return ErrKeyNotFound
 	}
 
-	for _, childNode := range from.children {
+	for _, childNode := range from.Children {
 		if childNode == to {
 			return ErrKeyIsExisted
 		}
 	}
 
-	dag.nodes[toKey].parentCounter++
-	dag.nodes[fromKey].children = append(from.children, to)
+	dag.nodes[toKey].ParentCounter++
+	dag.nodes[fromKey].Children = append(from.Children, to)
 
 	return nil
 }
@@ -214,9 +214,9 @@ func (dag *Dag) IsCirclular() bool {
 
 	visited := make(map[interface{}]int, len(dag.nodes))
 	rootNodes := make(map[interface{}]*Node)
-	for key, node := range dag.nodes {
-		visited[key] = 0
-		rootNodes[key] = node
+	for Key, node := range dag.nodes {
+		visited[Key] = 0
+		rootNodes[Key] = node
 	}
 
 	for _, node := range rootNodes {
@@ -235,9 +235,9 @@ func (dag *Dag) IsCirclular() bool {
 
 func (dag *Dag) hasCirclularDep(current *Node, visited map[interface{}]int) bool {
 
-	visited[current.key] = 1
-	for _, child := range current.children {
-		if visited[child.key] == 1 {
+	visited[current.Key] = 1
+	for _, child := range current.Children {
+		if visited[child.Key] == 1 {
 			return true
 		}
 
@@ -245,6 +245,6 @@ func (dag *Dag) hasCirclularDep(current *Node, visited map[interface{}]int) bool
 			return true
 		}
 	}
-	visited[current.key] = 2
+	visited[current.Key] = 2
 	return false
 }

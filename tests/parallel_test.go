@@ -200,7 +200,7 @@ var (
 
 	signer = types.NewInitialSigner(new(big.Int).SetInt64(1))
 
-	number = 4
+	number = 450 //大约从450条以上开始并发执行比顺序执行总体平均会快一点
 	//3000*3=9000千条交易，并发执行采用copy的方式，需要占用5GB左右内存。必须缩减这个占用的内存才行。
 	//考虑以什么方式可以减少copy的次数
 )
@@ -500,7 +500,8 @@ func TestTxsSequenceExecutePerformance(t *testing.T) {
 
 	/*****************************/
 	parallelBlockchain, _ := core.NewBlockChain(gspec.Config, vmConfig, db, pow.NewFaker())
-	parallelProcessor := core.NewStateParallelProcessor(gspec.Config, blockchain)
+	//parallelProcessor := core.NewStateParallelProcessor(gspec.Config, blockchain)
+	parallelProcessor := core.NewStateAccountParallelProcessor(gspec.Config, blockchain)
 	parallelBlockchain.SetProcessor(parallelProcessor)
 	t1 = time.Now()
 	if i, err := parallelBlockchain.InsertChain(types.Blocks{chain[1]}); err != nil {

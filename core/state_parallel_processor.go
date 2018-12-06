@@ -78,14 +78,14 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 	}
 	count := 0
 
-	dispatcher := dag.NewDispatcher(&block.Header().ExecutionDag, ParallelNum, int64(VerifyExecutionTimeout), context, func(node *dag.Node, context interface{}) (interface{}, error) {
+	dispatcher := dag.NewDispatcher(&block.Header().ExecutionDag, uint64(ParallelNum), int64(VerifyExecutionTimeout), context, func(node *dag.Node, context interface{}) (interface{}, error) {
 		// TODO: if system occurs, the block won't be retried any more
 		ctx := context.(*verifyCtx)
 		block := ctx.block
 		lastStateDb := node.LastState()
 
-		idx := node.Index()
-		if idx < 0 || idx > block.Txs.Len()-1 {
+		idx := node.GetIndex()
+		if idx < 0 || idx > uint64(block.Txs.Len()-1) {
 			return nil, ErrInvalidDagBlock
 		}
 		tx := block.Txs[idx] //通过这样的方式来取到相应的tx来执行
@@ -97,12 +97,13 @@ func (p *StateParallelProcessor) Process(block *types.Block, statedb *state.Stat
 			count++
 			txStateDb = lastStateDb.(*state.StateDB)
 		} else {
-			txStateDb = statedb.CopyWithStateObjects()
+			//txStateDb = statedb.CopyWithStateObjects()
+			txStateDb = statedb.Copy()
 		}
 
 		//add version info
 		txStateDb.SetSnapshotVersion(statedb.GetSnapshotVersion())
-		txStateDb.Prepare(tx.Hash(), block.Hash(), idx)
+		txStateDb.Prepare(tx.Hash(), block.Hash(), int(idx))
 
 		receipt, _, err := ApplyTransaction(p.config, p.bc, &header.Miner, gp, txStateDb, header, tx, usedGasArray[idx], cfg)
 
@@ -268,9 +269,9 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 			var last common.Hash
 			for i, tx := range accExecutedTx {
 				txid := tx.Hash()
-				dag.AddNode(txid.String())
+				dag.AddNode(txid)
 				if i != 0 {
-					dag.AddEdge(last.String(), txid.String())
+					dag.AddEdge(last, txid)
 				}
 				last = txid
 			}
@@ -300,13 +301,13 @@ func (p *StateParallelProcessor) ApplyTransactions(txMaps map[common.Address]typ
 			executedTx = append(executedTx, pendingTxs...)
 			receipts = append(receipts, pendingReceipts...)
 			//add dag
-			var last string
+			var last common.Hash
 			for i, tx := range pendingTxs {
-				txid := tx.Hash().String()
+				txid := tx.Hash()
 				dag.AddNode(txid)
 				if i == 0 {
 					for _, node := range lastTxids {
-						dag.AddEdge(node.String(), txid)
+						dag.AddEdge(node, txid)
 					}
 				} else {
 					dag.AddEdge(last, txid)
