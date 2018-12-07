@@ -282,6 +282,8 @@ func (p *StateAccountParallelProcessor) ParallelExecuteApplyTransactions(txMaps 
 			var accReceipts types.Receipts
 
 			excepts := make(map[common.Address]*big.Int)
+			exceptMiner := true
+			base := txState.GetBalance(header.Miner)
 			//fmt.Println("@@@@@@@@@@@@@11111111execute tx!!!")
 			//fmt.Printf("!!!!txMaps.accTxs:%#v", accTxs)
 			// Iterate over and process the individual transactions
@@ -310,10 +312,14 @@ func (p *StateAccountParallelProcessor) ParallelExecuteApplyTransactions(txMaps 
 				accReceipts = append(accReceipts, receipt)
 
 				msg, _ := tx.AsMessage(types.NewInitialSigner(p.config.ChainID))
-				if (from != header.Miner) && (msg.To() == nil || *msg.To() != header.Miner) {
-					excepts[header.Miner] = txState.GetBalance(header.Miner)
+				if (from == header.Miner) || (msg.To() != nil && *msg.To() == header.Miner) {
+					exceptMiner = false
 				}
 
+			}
+
+			if exceptMiner {
+				excepts[header.Miner] = base
 			}
 
 			lock.Lock()
