@@ -98,36 +98,25 @@ func (p *StateAccountParallelProcessor) Process(block *types.Block, statedb *sta
 
 //merge per account
 func (p *StateAccountParallelProcessor) ApplyTransactions(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, error) {
-	return NewStateParallelProcessor(p.config, p.bc).ApplyTransactions(txMaps, count, header, statedb)
-}
-
-//ParallelExecuteApplyTransactions 这个方法仅仅是并发执行并行队列，并且不会修改任何原有区块的信息，并且因为是验证阶段，无需再生成dag信息
-func (p *StateAccountParallelProcessor) ParallelExecuteApplyTransactions(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, *uint64, error) {
 
 	var executedTx types.Transactions
 	var receipts types.Receipts
-	totalUsedGas := new(uint64)
 
-	parallel := exexuteParallel
-	if exexuteParallel > len(txMaps) {
-		parallel = len(txMaps)
-	}
-
-	parallelCh := make(chan bool, parallel)
 	gasPool := new(GasPool).AddGas(header.GasLimit)
 	lock := &sync.Mutex{}
 	var pend sync.WaitGroup
 
+	pending := make(map[common.Address]types.Transactions)
+	pendingCount := 0
+
 	//log.Info("gas pool:", gasPool)
-	//log.Info("****parallel:", parallel)
+	dag := dag.NewDag()
+	lastTxids := make(map[common.Address]common.Hash)
+
 	for acc, txs := range txMaps {
-		parallelCh <- true
 		pend.Add(1)
 
 		go func(acc common.Address, accTxs types.Transactions) {
-			defer func() {
-				<-parallelCh
-			}()
 
 			defer pend.Done()
 
@@ -142,6 +131,168 @@ func (p *StateAccountParallelProcessor) ParallelExecuteApplyTransactions(txMaps 
 			var accReceipts types.Receipts
 
 			excepts := make(map[common.Address]*big.Int)
+			exceptMiner := true
+			base := txState.GetBalance(header.Miner)
+
+			// Iterate over and process the individual transactions
+			for i, tx := range accTxs {
+				from, _ := types.Sender(types.NewInitialSigner(p.config.ChainID), tx)
+				//log.WithFields(log.Fields{"gasPool": gasPool, "tx": tx.Hash().String(), "from": from.String()}).Info("new tx prepare to execute")
+				// If we don't have enough gas for any further transactions then we're done
+				if gp.Gas() < params.TxGas {
+					log.WithFields(log.Fields{"have": gp, "want": params.TxGas}).Debug("Not enough gas for further transactions")
+					break
+				}
+
+				// Start executing the transaction
+				txState.Prepare(tx.Hash(), common.Hash{}, i)
+				snap := txState.Snapshot()
+				receipt, gas, err := ApplyTransaction(p.config, p.bc, &header.Miner, gp, txState, header, tx, usedGas, vm.Config{})
+				if err != nil {
+					log.WithFields(log.Fields{"tx": tx.Hash().String(), "err": err}).Info("execute failed")
+					txState.RevertToSnapshot(snap)
+					break
+				}
+				//log.WithFields(log.Fields{"tx": tx.Hash().String()}).Info("execute success")
+				receipt.CumulativeGasUsed = gas
+				accExecutedTx = append(accExecutedTx, tx)
+				accReceipts = append(accReceipts, receipt)
+
+				msg, _ := tx.AsMessage(types.NewInitialSigner(p.config.ChainID))
+				if (from == header.Miner) || (msg.To() != nil && *msg.To() == header.Miner) {
+					exceptMiner = false
+				}
+			}
+
+			if exceptMiner {
+				excepts[header.Miner] = base
+			}
+
+			lock.Lock()
+
+			//other goroutine has execute over
+			if err := gasPool.SubGas(*usedGas); err != nil {
+				//log.WithFields(log.Fields{"acc": acc.String(), "gasPool": gasPool, "used gas": *usedGas, "err": err}).Info("execute error")
+				lock.Unlock()
+				return
+			}
+
+			//log.WithFields(log.Fields{"acc": acc.String(), "gasPool": gasPool, "used gas": *usedGas}).Info("gas pool")
+
+			//merge to stateDb, bypass collect conflicts and dependencies
+			err := statedb.Merge(txState, excepts)
+			if err != nil {
+				log.WithFields(log.Fields{"acc": acc.String(), "nonce": statedb.GetNonce(acc)}).Info("merge failed")
+				pending[acc] = accTxs
+				pendingCount += accTxs.Len()
+				lock.Unlock()
+				return
+			}
+			//log.WithFields(log.Fields{"acc": acc.String(), "nonce": statedb.GetNonce(acc)}).Info("merge success")
+
+			//if don't conflict, execute successful, then append to returns
+			executedTx = append(executedTx, accExecutedTx...)
+			receipts = append(receipts, accReceipts...)
+			header.GasUsed += *usedGas
+
+			//add dag
+			var last common.Hash
+			for i, tx := range accExecutedTx {
+				txid := tx.Hash()
+				dag.AddNode(txid)
+				if i != 0 {
+					dag.AddEdge(last, txid)
+				}
+				last = txid
+			}
+			lastTxids[acc] = last
+
+			lock.Unlock()
+
+		}(acc, txs)
+	}
+
+	pend.Wait()
+
+	//serially execute txs in pending tx map
+	log.WithFields(log.Fields{"pending": pendingCount}).Info("serially execute")
+	//for a, acctxs := range pending {
+	//	for _, tx := range acctxs {
+	//		log.WithFields(log.Fields{"from": a.String(), "tx": tx.Hash().String(), "nonce": statedb.GetNonce(a)}).Info("serially execute")
+	//	}
+	//}
+
+	if pendingCount > 0 {
+		processor := NewStateProcessor(p.config, p.bc)
+		pendingTxs, pendingReceipts, err := processor.ApplyTransactions(pending, pendingCount, header, statedb)
+		if err == nil {
+			executedTx = append(executedTx, pendingTxs...)
+			receipts = append(receipts, pendingReceipts...)
+			//add dag
+			var last common.Hash
+			for i, tx := range pendingTxs {
+				txid := tx.Hash()
+				dag.AddNode(txid)
+				if i == 0 {
+					for _, node := range lastTxids {
+						dag.AddEdge(node, txid)
+					}
+				} else {
+					dag.AddEdge(last, txid)
+				}
+				last = txid
+			}
+		}
+	}
+
+	header.ExecutionDag = *dag
+	//log.WithFields(log.Fields{"executed_tx_count": executedTx.Len(), "gas pool": gasPool}).Info("ApplyTransactions over")
+	return executedTx, receipts, nil
+}
+
+//ParallelExecuteApplyTransactions 这个方法仅仅是并发执行并行队列，并且不会修改任何原有区块的信息，并且因为是验证阶段，无需再生成dag信息
+func (p *StateAccountParallelProcessor) ParallelExecuteApplyTransactions(txMaps map[common.Address]types.Transactions, count int, header *types.Header, statedb *state.StateDB) (types.Transactions, types.Receipts, *uint64, error) {
+
+	var executedTx types.Transactions
+	var receipts types.Receipts
+	totalUsedGas := new(uint64)
+
+	// parallel := exexuteParallel
+	// if exexuteParallel > len(txMaps) {
+	// 	parallel = len(txMaps)
+	// }
+
+	// parallelCh := make(chan bool, parallel)
+	gasPool := new(GasPool).AddGas(header.GasLimit)
+	lock := &sync.Mutex{}
+	var pend sync.WaitGroup
+
+	//log.Info("gas pool:", gasPool)
+	//log.Info("****parallel:", parallel)
+	for acc, txs := range txMaps {
+		//parallelCh <- true
+		pend.Add(1)
+
+		go func(acc common.Address, accTxs types.Transactions) {
+			// defer func() {
+			// 	<-parallelCh
+			// }()
+
+			defer pend.Done()
+
+			txState := statedb.Copy()
+			usedGas := new(uint64)
+
+			lock.Lock()
+			gp := new(GasPool).AddGas(gasPool.Gas())
+			lock.Unlock()
+
+			var accExecutedTx types.Transactions
+			var accReceipts types.Receipts
+
+			excepts := make(map[common.Address]*big.Int)
+			exceptMiner := true
+			base := txState.GetBalance(header.Miner)
 			//fmt.Println("@@@@@@@@@@@@@11111111execute tx!!!")
 			//fmt.Printf("!!!!txMaps.accTxs:%#v", accTxs)
 			// Iterate over and process the individual transactions
@@ -170,10 +321,17 @@ func (p *StateAccountParallelProcessor) ParallelExecuteApplyTransactions(txMaps 
 				accReceipts = append(accReceipts, receipt)
 
 				msg, _ := tx.AsMessage(types.NewInitialSigner(p.config.ChainID))
-				if (from != header.Miner) && (msg.To() == nil || *msg.To() != header.Miner) {
-					excepts[header.Miner] = txState.GetBalance(header.Miner)
+				// if (from != header.Miner) && (msg.To() == nil || *msg.To() != header.Miner) {
+				// 	excepts[header.Miner] = txState.GetBalance(header.Miner)
+				// }
+				if (from == header.Miner) || (msg.To() != nil && *msg.To() == header.Miner) {
+					exceptMiner = false
 				}
 
+			}
+
+			if exceptMiner {
+				excepts[header.Miner] = base
 			}
 
 			lock.Lock()
@@ -206,7 +364,7 @@ func (p *StateAccountParallelProcessor) ParallelExecuteApplyTransactions(txMaps 
 	}
 
 	pend.Wait()
-	close(parallelCh)
+	//close(parallelCh)
 
 	//log.WithFields(log.Fields{"executed_tx_count": executedTx.Len(), "gas pool": gasPool}).Info("ApplyTransactions over")
 	return executedTx, receipts, totalUsedGas, nil
