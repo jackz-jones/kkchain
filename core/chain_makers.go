@@ -287,7 +287,7 @@ func (b *BlockGen) ExecuteTxsParallelWithoutDag(txMaps map[common.Address]types.
 		b.SetCoinbase(common.Address{})
 	}
 	//tmpBlock := types.NewBlockWithDag(b.header, b.txs, b.receipts, b.executionDag)
-	parallelProcessor := NewStateParallelProcessor(params.TestChainConfig, b.chainReader)
+	parallelProcessor := NewStateAccountParallelProcessor(params.TestChainConfig, b.chainReader)
 	//merge per transaction
 	//header := tmpBlock.Header()
 	_, receiptsArray, err := parallelProcessor.ApplyTransactions(txMaps, 0, b.header, b.statedb)
